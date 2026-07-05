@@ -51,6 +51,10 @@ The preview path calls Docusign MCP and labels the table source as
 `Docusign MCP`. There is no fixture fallback; MCP errors and missing Docusign
 fields are shown directly.
 
+The expected Agreement Manager field contract is documented in
+`docs/agreement-manager-field-mapping.md`. Use that document when configuring
+IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
+
 1. Copy `.env.example` to `.env` and fill in the local Docusign sandbox values.
    Do not commit `.env`, access tokens, refresh tokens, client secrets, or
    account-specific credentials.
