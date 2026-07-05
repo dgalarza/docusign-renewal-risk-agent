@@ -22,7 +22,7 @@ surface missing extraction data instead of inventing values.
 | `notice_deadline` | `noticeDeadline` | ISO date string or `null` | Yes | Derived by app or extracted directly | `2026-08-16` | Derive from `renewalDate - noticePeriodDays` when possible; otherwise use `null` and add `noticeDeadline` to `source.missingFields`. |
 | `has_termination_for_convenience` | `hasTerminationForConvenience` | boolean or `null` | Yes | Extracted termination provision | `false` | Use `null`; add `hasTerminationForConvenience` to `source.missingFields`; policy should route for legal review. |
 | `termination_fee` | `terminationFee` | string | No | Extracted termination provision | `None after current term` | Use `Not extracted`; add `terminationFee` to `source.missingFields` only when the field is expected for the record. |
-| `business_owner` | `businessOwner` | string | Yes | Docusign metadata, custom field, or ingest metadata | `Procurement Ops` | Show `Not extracted`; add `businessOwner` to `source.missingFields`. |
+| `business_owner` | `businessOwner` | string | No | Docusign metadata, custom field, or ingest metadata | `Procurement Ops` | Show `Unassigned` or `Not provided`; do not treat as an extraction failure. |
 | Docusign agreement ID | `agreementId` / `source.recordId` | string | Yes | Docusign source metadata | `demo-brightline-001` | Drop the row only if no stable ID is available. |
 | Docusign agreement URL | `source.recordUrl` | string or omitted | No | Docusign source metadata | Docusign agreement URL | Omit when unavailable. |
 
@@ -54,7 +54,9 @@ kept in `source.missingFields` so the later policy engine can distinguish:
   review when other renewal risk is present.
 - Missing `hasTerminationForConvenience`: legal-review path, because the buyer's
   exit right is unknown.
-- Missing `businessOwner`: operational follow-up cannot be routed confidently.
+- Missing `businessOwner`: do not block risk review. Route follow-up to a
+  configured workflow owner, review queue, or fixed demo recipient until owner
+  resolution is added.
 
 ## IAM Toolkit Setup Notes
 
@@ -78,7 +80,9 @@ Suggested sandbox workflow:
 
 For fields that do not naturally live in the agreement text, such as
 `business_owner`, supply metadata during ingestion or configure the field as a
-metadata/custom field instead of expecting AI extraction from the PDF.
+metadata/custom field instead of expecting AI extraction from the PDF. The demo
+should not require this field for classification; Workflow Builder routing can
+use a separate configured owner or review queue.
 
 References:
 

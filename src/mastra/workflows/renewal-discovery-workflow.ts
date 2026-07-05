@@ -129,9 +129,10 @@ Return one RenewalDiscoveryResult JSON object:
 - If noticeDeadline is available, calculate daysUntilNoticeDeadline from noticeDeadline and ${input.asOfDate}.
 - If Docusign does not return renewalDate, keep the row so the preview can show missing renewal fields.
 - Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, agreementValue, agreementStatus, and hasTerminationForConvenience when Docusign did not return them.
-- Use "Not extracted" for supplier, agreementTitle, terminationFee, or businessOwner when Docusign did not return them.
+- Use "Not extracted" for supplier, agreementTitle, or terminationFee when Docusign did not return them.
+- Use "Unassigned" for businessOwner when Docusign did not return owner metadata. Missing businessOwner should not make a row incomplete.
 - Use renewalType "not_extracted" unless Docusign returns an explicit renewal type.
-- source.missingFields must list each missing table field: supplier, agreementTitle, agreementStatus, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType, hasTerminationForConvenience, terminationFee, businessOwner.
+- source.missingFields must list each missing required table field: supplier, agreementTitle, agreementStatus, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType, hasTerminationForConvenience, terminationFee.
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 
 Do not add OData filters or renewal-date filters. Do not invent fields that Docusign did not return.`;

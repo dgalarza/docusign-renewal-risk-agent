@@ -17,4 +17,4 @@ derivation rules, missing-data behavior, and IAM Toolkit setup notes.
 | `notice_deadline` | date | Last date to act before renewal. | Derived from `renewal_date - notice_period_days` unless directly extracted. |
 | `has_termination_for_convenience` | boolean | Whether buyer can terminate for convenience. | Extracted termination provision. |
 | `termination_fee` | string | Extracted early termination fee or penalty. | Extracted termination provision. |
-| `business_owner` | string | Internal owner responsible for review. | Metadata/custom field; usually not contract text. |
+| `business_owner` | string | Optional internal owner for context. | Metadata/custom field; usually not contract text. Workflow routing can use a configured owner or review queue instead. |
