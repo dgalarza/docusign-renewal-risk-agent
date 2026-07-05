@@ -2,6 +2,8 @@
 
 These fictional Markdown agreements are safe for Docusign sandbox upload and are designed to exercise the renewal-risk policy cases used by the Supplier Renewal Risk Agent demo.
 
+The Markdown files in this directory are the editable source of truth. Upload-ready PDFs are generated into `examples/agreements/dist/` and should be used for Docusign sandbox upload instead of uploading the Markdown source files.
+
 Use `examples/agreement-demo-fixture.json` as the structured companion fixture. It maps each agreement file to classifier-ready data and expected findings. Expected classifications assume an `asOfDate` of `2026-07-01`, matching the fixture metadata.
 
 | File | Supplier | Scenario | Expected classification | Expected follow-up action | Key extraction signals |
@@ -12,8 +14,24 @@ Use `examples/agreement-demo-fixture.json` as the structured companion fixture. 
 | `atlas-calibration-labs.md` | Atlas Calibration Labs Inc. | No termination-for-convenience language for high-value renewal | `needs_review` | `legal_review` | Annual value is USD 96,000; manual renewal on 2026-09-30; 45-day notice deadline is 2026-08-16; agreement states there is no termination for convenience. |
 | `clearview-inventory-platform.md` | Clearview Inventory Platform LLC | Missing renewal date and notice period | `needs_review` | `legal_review` | Auto-renewal language refers to the order form, but the renewal date and notice period are not stated in the agreement text. |
 
+## Upload-Ready Files
+
+Upload the generated PDFs from `examples/agreements/dist/`:
+
+- `atlas-calibration-labs.pdf`
+- `brightline-office-supplies.pdf`
+- `clearview-inventory-platform.pdf`
+- `meridian-catering-services.pdf`
+- `northstar-maintenance-group.pdf`
+
+To regenerate the PDFs after editing agreement Markdown:
+
+```shell
+npm run build:agreements
+```
+
 ## Upload Notes
 
-- Upload each Markdown file as the completed agreement text for the named fictional supplier.
+- Upload each generated PDF as the completed agreement for the named fictional supplier.
 - After Agreement Manager extracts fields, compare the extracted values with `examples/agreement-demo-fixture.json`.
 - The examples deliberately include obvious renewal and termination clauses so reviewers can tell which policy path each file is meant to test without relying on private data.
