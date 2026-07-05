@@ -45,6 +45,11 @@ npm install
 npm test
 ```
 
+`npm test` runs the TypeScript typecheck and the deterministic policy-engine
+verification script (`npm run verify:policy`). The policy check validates
+`examples/agreement-demo-fixture.json` with `asOfDate=2026-07-01` plus focused
+missing-field and row-normalization cases.
+
 ## Docusign MCP Renewal Discovery
 
 The preview path calls Docusign MCP and labels the table source as

@@ -17,8 +17,8 @@ export const supplierRenewalAgreementSchema = z.object({
   agreementId: z.string(),
   supplierName: z.string(),
   agreementTitle: z.string(),
-  agreementStatus: z.enum(['completed', 'uploaded_historical']),
-  agreementValue: z.number(),
+  agreementStatus: z.enum(['completed', 'uploaded_historical']).nullable(),
+  agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
   renewalDate: z.string().nullable(),
@@ -110,6 +110,8 @@ export const followUpPlanSchema = z.object({
 
 export type SupplierRenewalAgreement = z.infer<typeof supplierRenewalAgreementSchema>;
 export type RenewalType = z.infer<typeof renewalTypeSchema>;
+export type RenewalRiskClassification = z.infer<typeof renewalRiskClassificationSchema>;
+export type FollowUpAction = z.infer<typeof followUpActionSchema>;
 export type RenewalAgreementSource = z.infer<typeof renewalAgreementSourceSchema>;
 export type RenewalAgreementTableRow = z.infer<typeof renewalAgreementTableRowSchema>;
 export type RenewalDiscoveryResult = z.infer<typeof renewalDiscoveryResultSchema>;

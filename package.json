@@ -4,7 +4,8 @@
   "description": "Mastra multi-agent demo for supplier renewal risk using Docusign Agreement Manager intelligence.",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck",
+    "test": "npm run typecheck && npm run verify:policy",
+    "verify:policy": "tsx scripts/verify-policy-engine.ts",
     "build:agreements": "node scripts/build-agreements.mjs",
     "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
     "preview:app": "next dev -H 0.0.0.0 -p 4173",

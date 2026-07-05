@@ -17,7 +17,12 @@ Which completed supplier agreements are renewing soon, and which ones need procu
 - Notice deadline already passed is blocked or escalated.
 - Missing renewal date or notice period needs review.
 - No termination-for-convenience right needs legal review.
-- High-value renewal plus unclear termination terms is blocked until reviewed.
+- High-value renewal plus unclear termination terms needs legal review until reviewed.
+
+Deterministic policy severity order is `standard < needs_review < urgent <
+blocked`. When multiple rules match the same agreement, the highest-severity
+finding wins; ties prefer the legal-review action when missing or unfavorable
+termination terms triggered the review.
 
 ## Demo Output
 
@@ -32,4 +37,3 @@ For each at-risk agreement, show:
 - Risk classification
 - Reasoning
 - Recommended action
-
