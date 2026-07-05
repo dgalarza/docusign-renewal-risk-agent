@@ -5,6 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck",
+    "build:agreements": "node scripts/build-agreements.mjs",
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start"
@@ -36,8 +37,8 @@
   "devDependencies": {
     "@types/node": "^26.0.0",
     "mastra": "^1.18.0",
+    "pdfkit": "^0.19.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }
-

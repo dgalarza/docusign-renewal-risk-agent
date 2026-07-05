@@ -1,6 +1,8 @@
 output.txt
 node_modules
 dist
+!examples/agreements/dist/
+!examples/agreements/dist/*.pdf
 .mastra
 .env.development
 .env
@@ -10,4 +12,3 @@ dist
 *.duckdb.wal
 .netlify
 .vercel
-
