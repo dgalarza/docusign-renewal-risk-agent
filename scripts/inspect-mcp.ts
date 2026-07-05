@@ -4,23 +4,34 @@ import { resolve } from 'node:path';
 
 loadDotEnv();
 
-const { docusignMcpClient, getDocusignMcpUrl } = await import(
-  '../src/mastra/mcp/docusign-mcp-client'
-);
-const { runRenewalDiscoveryWorkflow } = await import(
-  '../src/mastra/workflows/renewal-discovery-workflow'
-);
-
 const mode = process.argv[2] ?? 'status';
 const asOfDate = process.argv[3];
+const reviewWindowDays = Number(process.argv[4] ?? 90);
 
-if (mode === 'discover') {
+if (mode === 'fixture') {
+  const { runRenewalFixtureReview } = await import(
+    '../src/mastra/workflows/renewal-discovery-workflow'
+  );
+  const result = await runRenewalFixtureReview({
+    asOfDate,
+    reviewWindowDays,
+  });
+  console.log(JSON.stringify(result, null, 2));
+} else if (mode === 'discover') {
+  const { runRenewalDiscoveryWorkflow } = await import(
+    '../src/mastra/workflows/renewal-discovery-workflow'
+  );
   const result = await runRenewalDiscoveryWorkflow({
     request: 'Find supplier agreements renewing in the next 90 days.',
     asOfDate,
+    reviewWindowDays,
+    source: 'docusign_mcp',
   });
   console.log(JSON.stringify(result, null, 2));
 } else {
+  const { docusignMcpClient, getDocusignMcpUrl } = await import(
+    '../src/mastra/mcp/docusign-mcp-client'
+  );
   const { tools, errors } = await docusignMcpClient.listToolsWithErrors();
   const status = {
     configured: Boolean(process.env.DOCUSIGN_MCP_ACCESS_TOKEN),
@@ -29,9 +40,8 @@ if (mode === 'discover') {
     errors,
   };
   console.log(JSON.stringify(status, null, 2));
+  await docusignMcpClient.disconnect();
 }
-
-await docusignMcpClient.disconnect();
 
 function loadDotEnv() {
   try {

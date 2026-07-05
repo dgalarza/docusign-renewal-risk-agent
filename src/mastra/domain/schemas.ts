@@ -30,7 +30,7 @@ export const supplierRenewalAgreementSchema = z.object({
 });
 
 export const renewalAgreementSourceSchema = z.object({
-  system: z.literal('docusign_mcp'),
+  system: z.enum(['docusign_mcp', 'fixture']),
   toolName: z.string().optional(),
   recordId: z.string().optional(),
   recordUrl: z.string().optional(),
@@ -92,6 +92,10 @@ export const renewalRiskBriefSchema = z.object({
   findings: z.array(renewalRiskFindingSchema),
 });
 
+export const renewalReviewWorkflowResultSchema = renewalDiscoveryResultSchema.extend({
+  riskBrief: renewalRiskBriefSchema.nullable(),
+});
+
 export const humanDecisionSchema = z.object({
   agreementId: z.string(),
   decision: z.enum(['approved', 'edited', 'rejected']),
@@ -117,5 +121,6 @@ export type RenewalAgreementTableRow = z.infer<typeof renewalAgreementTableRowSc
 export type RenewalDiscoveryResult = z.infer<typeof renewalDiscoveryResultSchema>;
 export type RenewalRiskFinding = z.infer<typeof renewalRiskFindingSchema>;
 export type RenewalRiskBrief = z.infer<typeof renewalRiskBriefSchema>;
+export type RenewalReviewWorkflowResult = z.infer<typeof renewalReviewWorkflowResultSchema>;
 export type HumanDecision = z.infer<typeof humanDecisionSchema>;
 export type FollowUpPlan = z.infer<typeof followUpPlanSchema>;

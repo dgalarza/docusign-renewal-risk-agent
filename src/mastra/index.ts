@@ -6,9 +6,15 @@ import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { resolve } from 'node:path';
 import { intakeAgent } from './agents/intake-agent';
+import { riskReviewAgent } from './agents/risk-review-agent';
 import { renewalDiscoveryWorkflow } from './workflows/renewal-discovery-workflow';
 
 export { intakeAgent } from './agents/intake-agent';
+export {
+  classifyRenewalRiskTool,
+  createRenewalRiskBriefTool,
+  riskReviewAgent,
+} from './agents/risk-review-agent';
 export {
   classifyRenewalRisk,
   createRenewalRiskBrief,
@@ -19,6 +25,7 @@ export {
 export {
   renewalDiscoveryWorkflow,
   runRenewalDiscoveryWorkflow,
+  runRenewalFixtureReview,
 } from './workflows/renewal-discovery-workflow';
 export {
   docusignMcpClient,
@@ -29,6 +36,7 @@ export type {
   HumanDecision,
   RenewalAgreementTableRow,
   RenewalDiscoveryResult,
+  RenewalReviewWorkflowResult,
   RenewalRiskBrief,
   RenewalRiskFinding,
   SupplierRenewalAgreement,
@@ -54,7 +62,7 @@ const storage = new MastraCompositeStore({
 
 export const mastra = new Mastra({
   server: { port: 4111 },
-  agents: { intakeAgent },
+  agents: { intakeAgent, riskReviewAgent },
   workflows: { renewalDiscoveryWorkflow },
   observability: new Observability({
     configs: {

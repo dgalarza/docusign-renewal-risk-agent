@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
-  renewalDiscoveryResultSchema,
-  type RenewalDiscoveryResult,
+  renewalReviewWorkflowResultSchema,
+  type RenewalReviewWorkflowResult,
 } from '@/mastra/domain/schemas';
 
 export const runtime = 'nodejs';
@@ -26,10 +26,10 @@ export async function GET(request: Request) {
       reviewWindowDays,
     });
 
-    return NextResponse.json(renewalDiscoveryResultSchema.parse(result));
+    return NextResponse.json(renewalReviewWorkflowResultSchema.parse(result));
   } catch (error) {
     return NextResponse.json(
-      renewalDiscoveryResultSchema.parse(
+      renewalReviewWorkflowResultSchema.parse(
         buildMastraWorkflowErrorResult({
           asOfDate,
           reviewWindowDays,
@@ -89,7 +89,7 @@ const buildMastraWorkflowErrorResult = ({
   asOfDate?: string;
   reviewWindowDays: number;
   error: unknown;
-}): RenewalDiscoveryResult => ({
+}): RenewalReviewWorkflowResult => ({
   status: 'error',
   sourceLabel: 'Docusign MCP',
   asOfDate: asOfDate ?? new Date().toISOString().slice(0, 10),
@@ -99,4 +99,5 @@ const buildMastraWorkflowErrorResult = ({
   availableTools: [],
   selectedTool: null,
   errors: [error instanceof Error ? error.message : String(error)],
+  riskBrief: null,
 });

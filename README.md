@@ -50,11 +50,27 @@ test (`npm run test:policy`). The policy test validates
 `examples/agreement-demo-fixture.json` with `asOfDate=2026-07-01` plus focused
 missing-field and row-normalization cases.
 
+## Local Risk Review Fixture
+
+Run the discovery workflow against the demo fixture without Docusign MCP:
+
+```shell
+npm run inspect:mcp fixture 2026-07-01 120
+```
+
+The command emits the same workflow result shape as the live path:
+
+- `rows`: normalized renewal agreement table rows.
+- `riskBrief`: deterministic policy output with `generatedAt`,
+  `reviewWindowDays`, `agreementsReviewed`, and per-agreement `findings`.
+- each finding includes `classification`, `recommendedAction`, `rationale`,
+  `daysUntilNoticeDeadline`, and `extractedSignals`.
+
 ## Docusign MCP Renewal Discovery
 
 The preview path calls Docusign MCP and labels the table source as
-`Docusign MCP`. There is no fixture fallback; MCP errors and missing Docusign
-fields are shown directly.
+`Docusign MCP`. MCP errors and missing Docusign fields are shown directly; the
+fixture mode above is a local/demo command for repeatable risk-review runs.
 
 The expected Agreement Manager field contract is documented in
 `docs/agreement-manager-field-mapping.md`. Use that document when configuring
@@ -66,10 +82,11 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
 2. Run `npm run auth:docusign` to complete the Docusign OAuth flow and paste the
    returned token values into `.env`.
 3. Run `npm run inspect:mcp` to verify MCP tool discovery.
-4. Run `npm run inspect:mcp discover 2026-07-05` to run the Intake Agent
+4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the Intake Agent
    workflow. The agent receives Docusign MCP tools through Mastra
    `MCPClient.listTools()` and calls Agreement Manager before rows are
-   normalized for the preview table.
+   normalized for the preview table and classified by the deterministic risk
+   policy.
 5. Run `npm run dev` to start the Mastra API and Studio on
    `http://127.0.0.1:4111/`.
 6. Run `npm run preview:app` and open `http://localhost:4173/`.
@@ -87,10 +104,13 @@ discovery executes:
    `POST /api/workflows/renewalDiscoveryWorkflow/stream` endpoint and reads the
    record-separated workflow chunk stream (`workflow-start`,
    `workflow-step-output`, `workflow-step-result`, ...).
-3. Inside the workflow step, the Intake Agent's `onChunk` callback forwards
+3. Inside the intake workflow step, the Intake Agent's `onChunk` callback forwards
    each Docusign MCP `tool-call` / `tool-result` through the step `writer`, so
    individual MCP calls surface as `workflow-step-output` chunks.
-4. The route translates chunks into `progress` server-sent events and closes
+4. The risk-review step maps discovery rows into policy-ready agreements,
+   creates a deterministic `riskBrief`, and emits progress for the classification
+   summary.
+5. The route translates chunks into `progress` server-sent events and closes
    with a final `result` (or `failure`) event.
 
 `GET /api/renewals` remains as the non-streaming JSON path over

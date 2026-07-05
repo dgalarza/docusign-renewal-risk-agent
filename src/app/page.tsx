@@ -2,7 +2,11 @@
 
 import { AlertCircle, Loader2, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { RenewalAgreementTableRow, RenewalDiscoveryResult } from '@/mastra/domain/schemas';
+import type {
+  RenewalAgreementTableRow,
+  RenewalReviewWorkflowResult,
+  RenewalRiskFinding,
+} from '@/mastra/domain/schemas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +21,7 @@ import {
 import { RunLedger, type LedgerEntry, type LedgerPhase } from '@/components/run-ledger';
 import { cn } from '@/lib/utils';
 
-type UiStatus = RenewalDiscoveryResult['status'] | 'idle' | 'loading';
+type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
 
 const DEFAULT_REVIEW_WINDOW_DAYS = 90;
 
@@ -41,7 +45,7 @@ export default function RenewalDiscoveryPage() {
   const [asOfDate, setAsOfDate] = useState(
     initialParams.get('asOfDate') ?? new Date().toISOString().slice(0, 10),
   );
-  const [result, setResult] = useState<RenewalDiscoveryResult | null>(null);
+  const [result, setResult] = useState<RenewalReviewWorkflowResult | null>(null);
   const [status, setStatus] = useState<UiStatus>('idle');
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const entryIdRef = useRef(0);
@@ -100,7 +104,7 @@ export default function RenewalDiscoveryPage() {
     source.addEventListener('result', event => {
       const payload = JSON.parse(
         (event as MessageEvent<string>).data,
-      ) as RenewalDiscoveryResult;
+      ) as RenewalReviewWorkflowResult;
 
       setResult(payload);
       setStatus(payload.status);
@@ -139,6 +143,7 @@ export default function RenewalDiscoveryPage() {
         availableTools: [],
         selectedTool: null,
         errors: [message],
+        riskBrief: null,
       });
       setStatus('error');
       pushEntry('error', 'Run failed', message);
@@ -213,7 +218,7 @@ export default function RenewalDiscoveryPage() {
 
           <ResultBar result={result} status={status} />
 
-          {rows.length > 0 ? <SummaryStrip rows={rows} /> : null}
+          {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
 
           <section className="overflow-x-auto rounded-lg border bg-card">
             <Table className="min-w-[1480px]">
@@ -231,15 +236,25 @@ export default function RenewalDiscoveryPage() {
                   <TableHead>Termination right</TableHead>
                   <TableHead>Termination fee</TableHead>
                   <TableHead>Business owner</TableHead>
+                  <TableHead>Risk</TableHead>
+                  <TableHead>Recommended action</TableHead>
                   <TableHead>Source record</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.length > 0 ? (
-                  rows.map(row => <AgreementRow key={row.agreementId} row={row} />)
+                  rows.map(row => (
+                    <AgreementRow
+                      key={row.agreementId}
+                      row={row}
+                      finding={result?.riskBrief?.findings.find(
+                        riskFinding => riskFinding.agreementId === row.agreementId,
+                      ) ?? null}
+                    />
+                  ))
                 ) : (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={13}>
+                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={15}>
                       {emptyStateMessage(status)}
                     </TableCell>
                   </TableRow>
@@ -289,7 +304,7 @@ function ResultBar({
   result,
   status,
 }: {
-  result: RenewalDiscoveryResult | null;
+  result: RenewalReviewWorkflowResult | null;
   status: UiStatus;
 }) {
   const sourceLabel = result?.sourceLabel ?? 'Docusign MCP';
@@ -339,32 +354,43 @@ function StatusChip({ status }: { status: UiStatus }) {
   );
 }
 
-function SummaryStrip({ rows }: { rows: RenewalAgreementTableRow[] }) {
+function SummaryStrip({
+  rows,
+  riskBrief,
+}: {
+  rows: RenewalAgreementTableRow[];
+  riskBrief: RenewalReviewWorkflowResult['riskBrief'];
+}) {
   const autoRenewing = rows.filter(row => row.renewalType === 'auto_renews').length;
-  const nearest = rows
-    .filter(row => typeof row.daysUntilNoticeDeadline === 'number')
-    .sort((a, b) => (a.daysUntilNoticeDeadline ?? 0) - (b.daysUntilNoticeDeadline ?? 0))[0];
   const valuedRows = rows.filter(row => typeof row.agreementValue === 'number');
   const portfolioValue = valuedRows.reduce(
     (total, row) => total + (row.agreementValue ?? 0),
     0,
   );
   const portfolioCurrency = valuedRows[0]?.currency || 'USD';
+  const urgentOrBlocked =
+    riskBrief?.findings.filter(
+      finding => finding.classification === 'urgent' || finding.classification === 'blocked',
+    ).length ?? 0;
+  const legalReviews =
+    riskBrief?.findings.filter(finding => finding.recommendedAction === 'legal_review').length ?? 0;
 
   return (
     <dl className="grid grid-cols-2 divide-border rounded-lg border bg-card sm:grid-cols-4 sm:divide-x">
-      <StatTile label="Agreements in window" value={String(rows.length)} />
       <StatTile
-        label="Auto-renewing"
-        value={String(autoRenewing)}
-        detail={autoRenewing > 0 ? 'Renew unless notice is given' : null}
+        label="Reviewed"
+        value={String(riskBrief?.agreementsReviewed ?? rows.length)}
+        detail="Deterministic policy"
       />
       <StatTile
-        label="Nearest notice deadline"
-        value={
-          nearest ? formatDayCount(nearest.daysUntilNoticeDeadline ?? 0) : 'Not extracted'
-        }
-        detail={nearest ? nearest.supplier : null}
+        label="Urgent or blocked"
+        value={String(urgentOrBlocked)}
+        detail={autoRenewing > 0 ? `${autoRenewing} auto-renewing` : null}
+      />
+      <StatTile
+        label="Legal review"
+        value={String(legalReviews)}
+        detail="Recommended action"
       />
       <StatTile
         label="Portfolio value"
@@ -402,7 +428,13 @@ function StatTile({
   );
 }
 
-function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
+function AgreementRow({
+  row,
+  finding,
+}: {
+  row: RenewalAgreementTableRow;
+  finding: RenewalRiskFinding | null;
+}) {
   const missing = row.source.missingFields;
 
   return (
@@ -438,6 +470,12 @@ function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
       </TableCell>
       <TableCell>{row.businessOwner}</TableCell>
       <TableCell>
+        {finding ? <RiskClassification finding={finding} /> : <NotExtracted />}
+      </TableCell>
+      <TableCell>
+        {finding ? <ActionValue action={finding.recommendedAction} /> : <NotExtracted />}
+      </TableCell>
+      <TableCell>
         <div className="space-y-1.5">
           <div className="max-w-40 truncate font-data text-xs text-muted-foreground">
             {row.source.recordId ?? row.agreementId}
@@ -447,6 +485,43 @@ function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
       </TableCell>
     </TableRow>
   );
+}
+
+function RiskClassification({ finding }: { finding: RenewalRiskFinding }) {
+  const labels: Record<RenewalRiskFinding['classification'], string> = {
+    standard: 'Standard',
+    needs_review: 'Needs review',
+    urgent: 'Urgent',
+    blocked: 'Blocked',
+  };
+
+  return (
+    <span
+      className={cn(
+        'inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium',
+        finding.classification === 'standard' && 'border-live/30 bg-live-wash text-live',
+        finding.classification === 'needs_review' && 'border-caution/30 bg-caution-wash text-caution',
+        finding.classification === 'urgent' && 'border-urgent/30 bg-urgent-wash text-urgent',
+        finding.classification === 'blocked' && 'border-urgent/40 bg-urgent text-white',
+      )}
+      title={finding.rationale}
+    >
+      {labels[finding.classification]}
+    </span>
+  );
+}
+
+function ActionValue({ action }: { action: RenewalRiskFinding['recommendedAction'] }) {
+  const labels: Record<RenewalRiskFinding['recommendedAction'], string> = {
+    no_action: 'No action',
+    owner_review: 'Owner review',
+    legal_review: 'Legal review',
+    renegotiate: 'Renegotiate',
+    prepare_cancellation_notice: 'Prepare cancellation',
+    escalate_missed_deadline: 'Escalate missed deadline',
+  };
+
+  return <span className="whitespace-nowrap">{labels[action]}</span>;
 }
 
 function StatusValue({ status }: { status: RenewalAgreementTableRow['agreementStatus'] }) {
