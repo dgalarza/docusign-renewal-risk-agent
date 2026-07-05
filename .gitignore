@@ -15,3 +15,13 @@ tsconfig.tsbuildinfo
 *.duckdb.wal
 .netlify
 .vercel
+
+# Docusign IAM Toolkit local/generated state
+docusign-iam/.env
+docusign-iam/.claude/
+docusign-iam/.cursor/
+docusign-iam/.gemini/
+docusign-iam/.github/
+docusign-iam/**/agreement-manager/configs/custom-catalog.json
+docusign-iam/**/agreement-manager/configs/standard-catalog.json
+docusign-iam/**/agreement-manager/tests/tracking*.json

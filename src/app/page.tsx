@@ -215,17 +215,21 @@ export default function RenewalDiscoveryPage() {
 
           {rows.length > 0 ? <SummaryStrip rows={rows} /> : null}
 
-          <section className="overflow-hidden rounded-lg border bg-card">
-            <Table className="min-w-[1120px]">
+          <section className="overflow-x-auto rounded-lg border bg-card">
+            <Table className="min-w-[1480px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Supplier</TableHead>
                   <TableHead>Agreement</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Renewal date</TableHead>
+                  <TableHead>Notice period</TableHead>
                   <TableHead>Notice deadline</TableHead>
                   <TableHead className="text-right">Days to notice</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Renewal type</TableHead>
+                  <TableHead>Termination right</TableHead>
+                  <TableHead>Termination fee</TableHead>
                   <TableHead>Business owner</TableHead>
                   <TableHead>Source record</TableHead>
                 </TableRow>
@@ -235,7 +239,7 @@ export default function RenewalDiscoveryPage() {
                   rows.map(row => <AgreementRow key={row.agreementId} row={row} />)
                 ) : (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={9}>
+                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={13}>
                       {emptyStateMessage(status)}
                     </TableCell>
                   </TableRow>
@@ -406,7 +410,13 @@ function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
       <TableCell className="font-medium text-foreground">{row.supplier}</TableCell>
       <TableCell className="text-muted-foreground">{row.agreementTitle}</TableCell>
       <TableCell>
+        <StatusValue status={row.agreementStatus} />
+      </TableCell>
+      <TableCell>
         <DataValue value={row.renewalDate} />
+      </TableCell>
+      <TableCell>
+        <NoticePeriodValue noticePeriodDays={row.noticePeriodDays} />
       </TableCell>
       <TableCell>
         <DataValue value={row.noticeDeadline} />
@@ -420,6 +430,12 @@ function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
       <TableCell>
         <RenewalTypeLabel value={row.renewalType} />
       </TableCell>
+      <TableCell>
+        <TerminationRightValue value={row.hasTerminationForConvenience} />
+      </TableCell>
+      <TableCell>
+        <ExtractedText value={row.terminationFee} />
+      </TableCell>
       <TableCell>{row.businessOwner}</TableCell>
       <TableCell>
         <div className="space-y-1.5">
@@ -431,6 +447,14 @@ function AgreementRow({ row }: { row: RenewalAgreementTableRow }) {
       </TableCell>
     </TableRow>
   );
+}
+
+function StatusValue({ status }: { status: RenewalAgreementTableRow['agreementStatus'] }) {
+  if (!status) {
+    return <NotExtracted />;
+  }
+
+  return status === 'uploaded_historical' ? 'Uploaded historical' : 'Completed';
 }
 
 function DataValue({ value }: { value: string | null }) {
@@ -453,6 +477,18 @@ function MoneyValue({ value, currency }: { value: number | null; currency: strin
         currency: currency || 'USD',
         maximumFractionDigits: 0,
       }).format(value)}
+    </span>
+  );
+}
+
+function NoticePeriodValue({ noticePeriodDays }: { noticePeriodDays: number | null }) {
+  if (noticePeriodDays === null) {
+    return <NotExtracted />;
+  }
+
+  return (
+    <span className="whitespace-nowrap font-data text-[13px] tabular-nums">
+      {noticePeriodDays} days
     </span>
   );
 }
@@ -505,6 +541,18 @@ function RenewalTypeLabel({ value }: { value: RenewalAgreementTableRow['renewalT
       {labels[value]}
     </span>
   );
+}
+
+function TerminationRightValue({ value }: { value: boolean | null }) {
+  if (value === null) {
+    return <NotExtracted />;
+  }
+
+  return value ? 'Yes' : 'No';
+}
+
+function ExtractedText({ value }: { value: string }) {
+  return value === 'Not extracted' ? <NotExtracted /> : value;
 }
 
 function MissingFieldsChip({ fields }: { fields: string[] }) {
