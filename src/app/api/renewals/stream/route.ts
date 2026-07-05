@@ -1,6 +1,7 @@
 import {
   renewalDiscoveryResultSchema,
-  type RenewalDiscoveryResult,
+  renewalReviewWorkflowResultSchema,
+  type RenewalReviewWorkflowResult,
 } from '@/mastra/domain/schemas';
 
 export const runtime = 'nodejs';
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
           );
         }
 
-        let result: RenewalDiscoveryResult | null = null;
+        let result: RenewalReviewWorkflowResult | null = null;
         let failure: string | null = null;
 
         for await (const chunk of readWorkflowChunks(upstream.body)) {
@@ -168,7 +169,7 @@ const translateWorkflowChunk = (
   chunk: MastraWorkflowChunk,
 ): {
   progress: ProgressEvent[];
-  result: RenewalDiscoveryResult | null;
+  result: RenewalReviewWorkflowResult | null;
   failure: string | null;
 } => {
   const payload = chunk.payload ?? {};
@@ -182,12 +183,13 @@ const translateWorkflowChunk = (
 
     case 'workflow-step-result': {
       if (payload.status === 'success') {
-        const parsed = renewalDiscoveryResultSchema.safeParse(payload.output);
+        const parsed = renewalReviewWorkflowResultSchema.safeParse(payload.output);
+        const intermediate = renewalDiscoveryResultSchema.safeParse(payload.output);
 
         return {
           progress: [],
           result: parsed.success ? parsed.data : null,
-          failure: parsed.success
+          failure: parsed.success || intermediate.success
             ? null
             : 'The workflow step returned data the preview could not parse.',
         };

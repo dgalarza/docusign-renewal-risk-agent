@@ -1,12 +1,27 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
-import { renewalDiscoveryResultSchema, type RenewalDiscoveryResult } from '../domain/schemas';
+import {
+  renewalAgreementTableRowSchema,
+  renewalDiscoveryResultSchema,
+  renewalReviewWorkflowResultSchema,
+  supplierRenewalAgreementSchema,
+  type RenewalAgreementTableRow,
+  type RenewalDiscoveryResult,
+  type RenewalReviewWorkflowResult,
+  type SupplierRenewalAgreement,
+} from '../domain/schemas';
+import {
+  createRenewalRiskBrief,
+  mapRenewalRowsToAgreements,
+} from '../tools/portfolio-tools';
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
+const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', import.meta.url);
 
 export type RenewalDiscoveryProgress = {
   type: 'renewal-progress';
-  kind: 'intake' | 'tool-call' | 'tool-result' | 'normalize';
+  kind: 'intake' | 'tool-call' | 'tool-result' | 'normalize' | 'risk-review';
   label: string;
   detail: string | null;
 };
@@ -15,6 +30,7 @@ export const renewalDiscoveryWorkflowInputSchema = z.object({
   request: z
     .string()
     .default('Find supplier agreements renewing in the next 90 days.'),
+  source: z.enum(['docusign_mcp', 'fixture']).default('docusign_mcp'),
   asOfDate: z.string().optional(),
   reviewWindowDays: z.number().default(90),
 });
@@ -26,11 +42,6 @@ const intakeAgentFindRenewalsStep = createStep({
   inputSchema: renewalDiscoveryWorkflowInputSchema,
   outputSchema: renewalDiscoveryResultSchema,
   execute: async ({ inputData, runId, mastra, writer }) => {
-    if (!mastra) {
-      throw new Error('Mastra instance is required to resolve the Intake Agent.');
-    }
-
-    const intakeAgent = mastra.getAgent('intakeAgent');
     const asOfDate = inputData.asOfDate ?? new Date().toISOString().slice(0, 10);
 
     const emitProgress = (progress: Omit<RenewalDiscoveryProgress, 'type'>) => {
@@ -38,6 +49,33 @@ const intakeAgentFindRenewalsStep = createStep({
         .write({ type: 'renewal-progress', ...progress } satisfies RenewalDiscoveryProgress)
         .catch(() => {});
     };
+
+    if (inputData.source === 'fixture') {
+      emitProgress({
+        kind: 'intake',
+        label: 'Fixture portfolio loaded',
+        detail: `Review window ${inputData.reviewWindowDays} days from ${asOfDate}`,
+      });
+
+      const result = await buildFixtureDiscoveryResult({
+        asOfDate,
+        reviewWindowDays: inputData.reviewWindowDays,
+      });
+
+      emitProgress({
+        kind: 'normalize',
+        label: `Normalized ${result.rows.length} fixture ${result.rows.length === 1 ? 'row' : 'rows'}`,
+        detail: `Status ${result.status}`,
+      });
+
+      return result;
+    }
+
+    if (!mastra) {
+      throw new Error('Mastra instance is required to resolve the Intake Agent.');
+    }
+
+    const intakeAgent = mastra.getAgent('intakeAgent');
 
     emitProgress({
       kind: 'intake',
@@ -84,6 +122,58 @@ const intakeAgentFindRenewalsStep = createStep({
       kind: 'normalize',
       label: `Normalized ${result.rows.length} agreement ${result.rows.length === 1 ? 'row' : 'rows'}`,
       detail: `Status ${result.status}`,
+    });
+
+    return result;
+  },
+});
+
+const riskReviewStep = createStep({
+  id: 'risk-review',
+  description:
+    'Risk Review Agent maps discovered rows into policy-ready agreements and creates a deterministic renewal risk brief.',
+  inputSchema: renewalDiscoveryResultSchema,
+  outputSchema: renewalReviewWorkflowResultSchema,
+  execute: async ({ inputData, mastra, writer }) => {
+    const emitProgress = (progress: Omit<RenewalDiscoveryProgress, 'type'>) => {
+      void writer
+        .write({ type: 'renewal-progress', ...progress } satisfies RenewalDiscoveryProgress)
+        .catch(() => {});
+    };
+
+    if (mastra) {
+      mastra.getAgent('riskReviewAgent');
+    }
+
+    emitProgress({
+      kind: 'risk-review',
+      label: 'Risk Review Agent engaged',
+      detail: `${inputData.rows.length} discovered ${inputData.rows.length === 1 ? 'agreement' : 'agreements'} queued for policy review`,
+    });
+
+    const agreements = mapRenewalRowsToAgreements(inputData.rows);
+    const riskBrief =
+      agreements.length > 0
+        ? createRenewalRiskBrief(agreements, {
+            asOfDate: inputData.asOfDate,
+            reviewWindowDays: inputData.reviewWindowDays,
+          })
+        : null;
+
+    const result = renewalReviewWorkflowResultSchema.parse({
+      ...inputData,
+      message: riskBrief
+        ? `${inputData.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
+        : `${inputData.message} Risk review found no agreements to classify.`,
+      riskBrief,
+    });
+
+    emitProgress({
+      kind: 'risk-review',
+      label: riskBrief
+        ? `Classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}`
+        : 'Risk review complete',
+      detail: riskBrief ? summarizeRiskBrief(riskBrief.findings) : 'No agreements in review window',
     });
 
     return result;
@@ -140,36 +230,167 @@ Do not add OData filters or renewal-date filters. Do not invent fields that Docu
 export const renewalDiscoveryWorkflow = createWorkflow({
   id: 'renewal-discovery-workflow',
   description:
-    'Docusign renewal discovery workflow. First step: Intake Agent finds supplier agreements renewing in the next 90 days through Agreement Manager MCP/API.',
+    'Docusign renewal discovery workflow. Intake Agent finds supplier agreements, then Risk Review Agent attaches deterministic policy classifications.',
   inputSchema: renewalDiscoveryWorkflowInputSchema,
-  outputSchema: renewalDiscoveryResultSchema,
-}).then(intakeAgentFindRenewalsStep);
+  outputSchema: renewalReviewWorkflowResultSchema,
+}).then(intakeAgentFindRenewalsStep).then(riskReviewStep);
 
 renewalDiscoveryWorkflow.commit();
 
 export const runRenewalDiscoveryWorkflow = async (
   input: z.input<typeof renewalDiscoveryWorkflowInputSchema>,
-): Promise<RenewalDiscoveryResult> => {
+): Promise<RenewalReviewWorkflowResult> => {
   const { mastra } = await import('../index');
   const workflow = mastra.getWorkflow('renewalDiscoveryWorkflow');
   const run = await workflow.createRun();
-  const workflowResult = await run.start({
-    inputData: renewalDiscoveryWorkflowInputSchema.parse(input),
-  });
+  const parsedInput = renewalDiscoveryWorkflowInputSchema.parse(input);
+  const workflowResult = await run.start({ inputData: parsedInput });
 
   if (workflowResult.status !== 'success') {
     return {
       status: 'error',
-      sourceLabel: 'Docusign MCP',
-      asOfDate: input.asOfDate ?? new Date().toISOString().slice(0, 10),
-      reviewWindowDays: input.reviewWindowDays ?? 90,
+      sourceLabel: parsedInput.source === 'fixture' ? 'Demo fixture' : 'Docusign MCP',
+      asOfDate: parsedInput.asOfDate ?? new Date().toISOString().slice(0, 10),
+      reviewWindowDays: parsedInput.reviewWindowDays,
       message: 'Renewal discovery workflow failed before the Intake Agent could return agreements.',
       rows: [],
       availableTools: [],
       selectedTool: null,
       errors: ['error' in workflowResult ? [workflowResult.error.message].filter(Boolean).join(': ') : workflowResult.status],
+      riskBrief: null,
     };
   }
 
   return workflowResult.result;
 };
+
+export const runRenewalFixtureReview = async (
+  input: Pick<z.input<typeof renewalDiscoveryWorkflowInputSchema>, 'asOfDate' | 'reviewWindowDays'>,
+): Promise<RenewalReviewWorkflowResult> => {
+  const parsedInput = renewalDiscoveryWorkflowInputSchema.parse({
+    source: 'fixture',
+    asOfDate: input.asOfDate,
+    reviewWindowDays: input.reviewWindowDays,
+  });
+  const asOfDate = parsedInput.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const discoveryResult = await buildFixtureDiscoveryResult({
+    asOfDate,
+    reviewWindowDays: parsedInput.reviewWindowDays,
+  });
+  const agreements = mapRenewalRowsToAgreements(discoveryResult.rows);
+  const riskBrief =
+    agreements.length > 0
+      ? createRenewalRiskBrief(agreements, {
+          asOfDate,
+          reviewWindowDays: parsedInput.reviewWindowDays,
+        })
+      : null;
+
+  return renewalReviewWorkflowResultSchema.parse({
+    ...discoveryResult,
+    message: riskBrief
+      ? `${discoveryResult.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
+      : `${discoveryResult.message} Risk review found no agreements to classify.`,
+    riskBrief,
+  });
+};
+
+const buildFixtureDiscoveryResult = async ({
+  asOfDate,
+  reviewWindowDays,
+}: {
+  asOfDate: string;
+  reviewWindowDays: number;
+}): Promise<RenewalDiscoveryResult> => {
+  const fixture = fixtureSchema.parse(
+    JSON.parse(await readFile(FIXTURE_PATH, 'utf8')),
+  );
+  const rows = fixture.examples
+    .map(example => mapFixtureAgreementToRow(example.agreement, asOfDate))
+    .filter(row => isRowInReviewWindow(row, asOfDate, reviewWindowDays));
+
+  return renewalDiscoveryResultSchema.parse({
+    status: rows.length > 0 ? 'live' : 'empty',
+    sourceLabel: 'Demo fixture',
+    asOfDate,
+    reviewWindowDays,
+    message:
+      rows.length > 0
+        ? `Loaded ${rows.length} fixture-backed supplier renewal ${rows.length === 1 ? 'agreement' : 'agreements'}.`
+        : 'No fixture agreements renew inside this window.',
+    rows,
+    availableTools: [],
+    selectedTool: null,
+    errors: [],
+  });
+};
+
+const mapFixtureAgreementToRow = (
+  agreement: SupplierRenewalAgreement,
+  asOfDate: string,
+): RenewalAgreementTableRow =>
+  renewalAgreementTableRowSchema.parse({
+    agreementId: agreement.agreementId,
+    supplier: agreement.supplierName,
+    agreementTitle: agreement.agreementTitle,
+    agreementStatus: agreement.agreementStatus,
+    renewalDate: agreement.renewalDate,
+    noticePeriodDays: agreement.noticePeriodDays,
+    noticeDeadline: agreement.noticeDeadline,
+    daysUntilNoticeDeadline: agreement.noticeDeadline
+      ? dateDiffDays(asOfDate, agreement.noticeDeadline)
+      : null,
+    agreementValue: agreement.agreementValue,
+    currency: agreement.currency,
+    renewalType: agreement.renewalType,
+    hasTerminationForConvenience: agreement.hasTerminationForConvenience,
+    terminationFee: agreement.terminationFee,
+    businessOwner: agreement.businessOwner,
+    source: {
+      system: 'fixture',
+      recordId: agreement.agreementId,
+      missingFields: [],
+    },
+  });
+
+const summarizeRiskBrief = (
+  findings: RenewalReviewWorkflowResult['riskBrief'] extends null
+    ? never
+    : NonNullable<RenewalReviewWorkflowResult['riskBrief']>['findings'],
+) => {
+  const counts = findings.reduce<Record<string, number>>((summary, finding) => {
+    summary[finding.classification] = (summary[finding.classification] ?? 0) + 1;
+    return summary;
+  }, {});
+
+  return Object.entries(counts)
+    .map(([classification, count]) => `${classification}: ${count}`)
+    .join(', ');
+};
+
+const isRowInReviewWindow = (
+  row: RenewalAgreementTableRow,
+  asOfDate: string,
+  reviewWindowDays: number,
+) => {
+  if (!row.renewalDate) {
+    return true;
+  }
+
+  const daysUntilRenewal = dateDiffDays(asOfDate, row.renewalDate);
+  return daysUntilRenewal >= 0 && daysUntilRenewal <= reviewWindowDays;
+};
+
+const dateDiffDays = (fromDate: string, toDate: string) => {
+  const from = new Date(`${fromDate}T00:00:00.000Z`);
+  const to = new Date(`${toDate}T00:00:00.000Z`);
+  return Math.ceil((to.getTime() - from.getTime()) / 86_400_000);
+};
+
+const fixtureSchema = z.object({
+  examples: z.array(
+    z.object({
+      agreement: supplierRenewalAgreementSchema,
+    }),
+  ),
+});

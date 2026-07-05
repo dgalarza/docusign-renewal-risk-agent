@@ -1,0 +1,69 @@
+import { Agent } from '@mastra/core/agent';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
+import {
+  renewalRiskBriefSchema,
+  renewalRiskFindingSchema,
+  supplierRenewalAgreementSchema,
+} from '../domain/schemas';
+import {
+  classifyRenewalRisk,
+  createRenewalRiskBrief,
+} from '../tools/portfolio-tools';
+
+export const classifyRenewalRiskTool = createTool({
+  id: 'classify-renewal-risk',
+  description:
+    'Classify one supplier agreement with the deterministic procurement renewal-risk policy.',
+  inputSchema: z.object({
+    agreement: supplierRenewalAgreementSchema,
+    asOfDate: z.string(),
+  }),
+  outputSchema: renewalRiskFindingSchema,
+  execute: async ({ agreement, asOfDate }) =>
+    classifyRenewalRisk(agreement, asOfDate),
+});
+
+export const createRenewalRiskBriefTool = createTool({
+  id: 'create-renewal-risk-brief',
+  description:
+    'Create a deterministic renewal risk brief for discovered supplier agreements.',
+  inputSchema: z.object({
+    agreements: z.array(supplierRenewalAgreementSchema),
+    asOfDate: z.string(),
+    reviewWindowDays: z.number(),
+  }),
+  outputSchema: renewalRiskBriefSchema,
+  execute: async ({ agreements, asOfDate, reviewWindowDays }) =>
+    createRenewalRiskBrief(agreements, { asOfDate, reviewWindowDays }),
+});
+
+export const riskReviewAgent = new Agent({
+  id: 'risk-review-agent',
+  name: 'Risk Review Agent',
+  description:
+    'Explains supplier renewal exposure after deterministic policy classification.',
+  instructions: `You are the Renewal Risk Agent for a Docusign supplier renewal-risk workflow.
+
+Your job is risk review:
+- Use completed supplier agreement facts from Agreement Manager or the demo fixture.
+- Apply the deterministic procurement policy through the provided tools.
+- Do not invent classifications, notice deadlines, agreement values, or termination rights.
+- Explain policy-driven findings in procurement language.
+- Recommend exactly one follow-up action per agreement from the policy output.
+
+Risk policy:
+- Auto-renewing agreement over $50k requires review.
+- Notice deadline within 30 days is urgent.
+- Notice deadline already passed is blocked or escalated.
+- Missing renewal date or notice period needs review.
+- No termination-for-convenience right needs legal review.
+- High-value renewal plus unclear termination terms needs legal review until reviewed.
+
+The deterministic policy severity order is standard < needs_review < urgent < blocked. When multiple rules match, the highest-severity finding wins; ties prefer legal review when missing or unfavorable termination terms triggered the review.`,
+  model: 'openai/gpt-5-mini',
+  tools: {
+    classifyRenewalRiskTool,
+    createRenewalRiskBriefTool,
+  },
+});
