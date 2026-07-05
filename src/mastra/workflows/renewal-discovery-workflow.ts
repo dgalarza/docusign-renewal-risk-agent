@@ -4,6 +4,13 @@ import { renewalDiscoveryResultSchema, type RenewalDiscoveryResult } from '../do
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
 
+export type RenewalDiscoveryProgress = {
+  type: 'renewal-progress';
+  kind: 'intake' | 'tool-call' | 'tool-result' | 'normalize';
+  label: string;
+  detail: string | null;
+};
+
 export const renewalDiscoveryWorkflowInputSchema = z.object({
   request: z
     .string()
@@ -18,13 +25,25 @@ const intakeAgentFindRenewalsStep = createStep({
     'Intake Agent queries Agreement Manager through Docusign MCP/API for supplier agreements renewing in the next 90 days.',
   inputSchema: renewalDiscoveryWorkflowInputSchema,
   outputSchema: renewalDiscoveryResultSchema,
-  execute: async ({ inputData, runId, mastra }) => {
+  execute: async ({ inputData, runId, mastra, writer }) => {
     if (!mastra) {
       throw new Error('Mastra instance is required to resolve the Intake Agent.');
     }
 
     const intakeAgent = mastra.getAgent('intakeAgent');
     const asOfDate = inputData.asOfDate ?? new Date().toISOString().slice(0, 10);
+
+    const emitProgress = (progress: Omit<RenewalDiscoveryProgress, 'type'>) => {
+      void writer
+        .write({ type: 'renewal-progress', ...progress } satisfies RenewalDiscoveryProgress)
+        .catch(() => {});
+    };
+
+    emitProgress({
+      kind: 'intake',
+      label: 'Intake Agent engaged',
+      detail: `Review window ${inputData.reviewWindowDays} days from ${asOfDate}`,
+    });
 
     const agentResult = await intakeAgent.generate(
       buildIntakeAgentRenewalPrompt({
@@ -36,17 +55,50 @@ const intakeAgentFindRenewalsStep = createStep({
         maxSteps: 5,
         runId: `workflow-${runId}-intake`,
         structuredOutput: { schema: renewalDiscoveryResultSchema },
+        onChunk: chunk => {
+          if (chunk.type === 'tool-call') {
+            emitProgress({
+              kind: 'tool-call',
+              label: `Calling ${chunk.payload.toolName}`,
+              detail: describeToolArgs(chunk.payload.args),
+            });
+          } else if (chunk.type === 'tool-result') {
+            emitProgress({
+              kind: 'tool-result',
+              label: `${chunk.payload.toolName} responded`,
+              detail: null,
+            });
+          }
+        },
       },
     );
 
-    return renewalDiscoveryResultSchema.parse({
+    const result = renewalDiscoveryResultSchema.parse({
       ...agentResult.object,
       sourceLabel: 'Docusign MCP',
       asOfDate,
       reviewWindowDays: inputData.reviewWindowDays,
     });
+
+    emitProgress({
+      kind: 'normalize',
+      label: `Normalized ${result.rows.length} agreement ${result.rows.length === 1 ? 'row' : 'rows'}`,
+      detail: `Status ${result.status}`,
+    });
+
+    return result;
   },
 });
+
+const describeToolArgs = (args: unknown): string | null => {
+  if (!args || typeof args !== 'object') {
+    return null;
+  }
+
+  const reviewStatus = (args as Record<string, unknown>).review_status;
+
+  return typeof reviewStatus === 'string' ? `Review status ${reviewStatus}` : null;
+};
 
 const buildIntakeAgentRenewalPrompt = (input: {
   request: string;

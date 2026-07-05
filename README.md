@@ -63,7 +63,26 @@ fields are shown directly.
    normalized for the preview table.
 5. Run `npm run dev` to start the Mastra API and Studio on
    `http://127.0.0.1:4111/`.
-6. Run `npm run preview:app` and open `http://127.0.0.1:4173/`.
-   The Next.js preview page waits for the Discover button, then calls the
-   Mastra workflow API configured by `MASTRA_API_URL` before rendering the
+6. Run `npm run preview:app` and open `http://localhost:4173/`.
+   The Next.js preview page waits for the Run discovery button, then streams
+   the Mastra workflow configured by `MASTRA_API_URL` before rendering the
    returned table contract.
+
+## Live Run Progress
+
+The preview page shows incremental workflow progress in a run ledger while
+discovery executes:
+
+1. The browser opens an `EventSource` to `GET /api/renewals/stream`.
+2. That route calls the Mastra server's
+   `POST /api/workflows/renewalDiscoveryWorkflow/stream` endpoint and reads the
+   record-separated workflow chunk stream (`workflow-start`,
+   `workflow-step-output`, `workflow-step-result`, ...).
+3. Inside the workflow step, the Intake Agent's `onChunk` callback forwards
+   each Docusign MCP `tool-call` / `tool-result` through the step `writer`, so
+   individual MCP calls surface as `workflow-step-output` chunks.
+4. The route translates chunks into `progress` server-sent events and closes
+   with a final `result` (or `failure`) event.
+
+`GET /api/renewals` remains as the non-streaming JSON path over
+`start-async`.
