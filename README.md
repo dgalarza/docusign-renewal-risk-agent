@@ -61,6 +61,9 @@ fields are shown directly.
    workflow. The agent receives Docusign MCP tools through Mastra
    `MCPClient.listTools()` and calls Agreement Manager before rows are
    normalized for the preview table.
-5. Run `npm run preview:app` and open `http://127.0.0.1:4173/`.
-   The Next.js preview page waits for the Discover button before invoking the
-   Mastra renewal discovery workflow.
+5. Run `npm run dev` to start the Mastra API and Studio on
+   `http://127.0.0.1:4111/`.
+6. Run `npm run preview:app` and open `http://127.0.0.1:4173/`.
+   The Next.js preview page waits for the Discover button, then calls the
+   Mastra workflow API configured by `MASTRA_API_URL` before rendering the
+   returned table contract.
