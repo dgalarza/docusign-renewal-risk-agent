@@ -4,6 +4,8 @@ dist
 .next
 out
 tsconfig.tsbuildinfo
+!examples/agreements/dist/
+!examples/agreements/dist/*.pdf
 .mastra
 .env.development
 .env

@@ -5,6 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck",
+    "build:agreements": "node scripts/build-agreements.mjs",
     "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
     "preview:app": "next dev -H 0.0.0.0 -p 4173",
     "preview:build": "next build",
@@ -52,6 +53,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "mastra": "^1.18.0",
+    "pdfkit": "^0.19.1",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
