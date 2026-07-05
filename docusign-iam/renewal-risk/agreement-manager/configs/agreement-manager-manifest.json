@@ -1,0 +1,312 @@
+{
+  "version": "1.0.0",
+  "defaultLocale": "en",
+  "namespace": "com.praxisworks.renewal-risk@1.0.0",
+  "standardAgreementTypes": [],
+  "customAgreementTypes": [
+    {
+      "key": "C_SupplierRenewalAgreement",
+      "displayName": "Supplier Renewal Agreement",
+      "description": "Completed supplier agreement reviewed for renewal risk, notice deadlines, agreement value, and termination rights.",
+      "aiDefinition": "A supplier, vendor, services, subscription, maintenance, catering, calibration, office supply, or software agreement that may renew, auto-renew, expire, or require advance notice before renewal.",
+      "category": "BusinessServices",
+      "customExtractionEnabled": true,
+      "fields": {
+        "additionalStandardFields": [
+          "Title",
+          "Status",
+          "Renewal",
+          "Annual Contract Value",
+          "Total Contract Value",
+          "Termination for Convenience - Notice Period"
+        ],
+        "customFields": [
+          "Demo Supplier Name",
+          "Demo Agreement Value",
+          "Demo Currency",
+          "Demo Renewal Type",
+          "Demo Renewal Date",
+          "Demo Notice Period Days",
+          "Demo Notice Deadline",
+          "Demo Termination for Convenience Available",
+          "Demo Termination Fee",
+          "Demo Business Owner Name"
+        ]
+      },
+      "docs": [
+        "atlas-calibration-labs.pdf",
+        "brightline-office-supplies.pdf",
+        "clearview-inventory-platform.pdf",
+        "meridian-catering-services.pdf",
+        "northstar-maintenance-group.pdf"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "key": "C_SupplierName",
+      "displayName": "Demo Supplier Name",
+      "category": "GeneralCategory",
+      "fieldType": "String",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The supplier, vendor, counterparty, or service provider name for the agreement.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "This Workplace Supplies Subscription Agreement is entered into by and between Acme Corporation and Brightline Office Supplies LLC.",
+            "confirmedValue": "Brightline Office Supplies LLC"
+          },
+          {
+            "exampleText": "Customer engages Meridian Catering Services Inc. to provide event catering services.",
+            "confirmedValue": "Meridian Catering Services Inc."
+          },
+          {
+            "exampleText": "Northstar Maintenance Group LLC shall provide facilities maintenance services under this Agreement.",
+            "confirmedValue": "Northstar Maintenance Group LLC"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_AgreementValue",
+      "displayName": "Demo Agreement Value",
+      "category": "FinancialCategory",
+      "fieldType": "Number",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The annual, renewal, subscription, or recurring contract value for the agreement expressed as a number without currency symbols.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "The annual subscription fee is $82,000.",
+            "confirmedValue": "82000"
+          },
+          {
+            "exampleText": "Customer shall pay Vendor USD 42,000 per renewal term.",
+            "confirmedValue": "42000"
+          },
+          {
+            "exampleText": "The current annual services value is ninety-six thousand dollars.",
+            "confirmedValue": "96000"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_Currency",
+      "displayName": "Demo Currency",
+      "category": "FinancialCategory",
+      "fieldType": "String",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The currency used for the agreement value, such as USD, EUR, or GBP.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "The annual subscription fee is $82,000 USD.",
+            "confirmedValue": "USD"
+          },
+          {
+            "exampleText": "All fees are payable in United States dollars.",
+            "confirmedValue": "USD"
+          },
+          {
+            "exampleText": "Customer shall pay Vendor USD 42,000 per renewal term.",
+            "confirmedValue": "USD"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_RenewalType",
+      "displayName": "Demo Renewal Type",
+      "category": "RenewalCategory",
+      "fieldType": "Dropdown",
+      "customExtractionEnabled": true,
+      "aiDefinition": "Whether the agreement auto-renews, requires manual renewal, is evergreen, has no renewal, or does not state renewal terms.",
+      "dropdownOptions": [
+        {
+          "name": "Auto-renews"
+        },
+        {
+          "name": "Manual renewal"
+        },
+        {
+          "name": "Evergreen"
+        },
+        {
+          "name": "No renewal"
+        },
+        {
+          "name": "Not stated"
+        }
+      ],
+      "examples": {
+        "en": [
+          {
+            "exampleText": "This Agreement automatically renews for successive one-year terms unless either party provides written notice.",
+            "confirmedValue": "Auto-renews"
+          },
+          {
+            "exampleText": "Any renewal must be agreed in writing by both parties before the end of the current term.",
+            "confirmedValue": "Manual renewal"
+          },
+          {
+            "exampleText": "The agreement continues until terminated by either party.",
+            "confirmedValue": "Evergreen"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_RenewalDate",
+      "displayName": "Demo Renewal Date",
+      "category": "RenewalCategory",
+      "fieldType": "DateTime",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The next renewal, auto-renewal, expiration, or term end date that determines when renewal action is needed.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "The Agreement will automatically renew on October 15, 2026.",
+            "confirmedValue": "2026-10-15"
+          },
+          {
+            "exampleText": "The current term ends and renews on August 19, 2026.",
+            "confirmedValue": "2026-08-19"
+          },
+          {
+            "exampleText": "The renewal date for the next term is September 30, 2026.",
+            "confirmedValue": "2026-09-30"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_NoticePeriodDays",
+      "displayName": "Demo Notice Period Days",
+      "category": "RenewalCategory",
+      "fieldType": "Number",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The number of days of advance written notice required to cancel, change, or prevent renewal.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "Either party must provide at least 60 days written notice before the renewal date.",
+            "confirmedValue": "60"
+          },
+          {
+            "exampleText": "Customer may prevent renewal by giving Vendor 30 days prior written notice.",
+            "confirmedValue": "30"
+          },
+          {
+            "exampleText": "Notice of non-renewal must be delivered no fewer than forty-five days before renewal.",
+            "confirmedValue": "45"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_NoticeDeadline",
+      "displayName": "Demo Notice Deadline",
+      "category": "RenewalCategory",
+      "fieldType": "DateTime",
+      "customExtractionEnabled": true,
+      "aiDefinition": "The last calendar date by which notice must be sent to cancel, change, or prevent renewal. If the agreement only states renewal date and notice period, the app can derive this field.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "Notice must be received no later than August 16, 2026.",
+            "confirmedValue": "2026-08-16"
+          },
+          {
+            "exampleText": "The deadline for notice of non-renewal is July 20, 2026.",
+            "confirmedValue": "2026-07-20"
+          },
+          {
+            "exampleText": "Written cancellation notice must be delivered by June 5, 2026.",
+            "confirmedValue": "2026-06-05"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_TerminationForConvenienceAvailable",
+      "displayName": "Demo Termination for Convenience Available",
+      "category": "TerminationCategory",
+      "fieldType": "Dropdown",
+      "customExtractionEnabled": true,
+      "aiDefinition": "Whether the buyer or customer can terminate the agreement for convenience, without needing vendor breach or cause.",
+      "dropdownOptions": [
+        {
+          "name": "Yes"
+        },
+        {
+          "name": "No"
+        },
+        {
+          "name": "Not stated"
+        }
+      ],
+      "examples": {
+        "en": [
+          {
+            "exampleText": "Customer may terminate this Agreement for convenience upon 30 days prior written notice.",
+            "confirmedValue": "Yes"
+          },
+          {
+            "exampleText": "Customer may not terminate this Agreement for convenience during the committed term.",
+            "confirmedValue": "No"
+          },
+          {
+            "exampleText": "Termination rights are limited to uncured material breach by either party.",
+            "confirmedValue": "No"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_TerminationFee",
+      "displayName": "Demo Termination Fee",
+      "category": "TerminationCategory",
+      "fieldType": "String",
+      "customExtractionEnabled": true,
+      "aiDefinition": "Any fee, penalty, remaining charge, or financial consequence that applies if the buyer terminates or cancels the agreement before the end of the term.",
+      "examples": {
+        "en": [
+          {
+            "exampleText": "Early termination requires payment of the remaining fees due for the current term.",
+            "confirmedValue": "Remaining fees due for the current term"
+          },
+          {
+            "exampleText": "There is no termination fee after the current term.",
+            "confirmedValue": "None after current term"
+          },
+          {
+            "exampleText": "Termination for convenience is not available.",
+            "confirmedValue": "Termination for convenience is not available"
+          }
+        ]
+      }
+    },
+    {
+      "key": "C_DemoBusinessOwnerName",
+      "displayName": "Demo Business Owner Name",
+      "category": "OtherCategory",
+      "fieldType": "String",
+      "customExtractionEnabled": false
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-07-05T00:00:00Z",
+    "updatedAt": "2026-07-05T00:00:00Z",
+    "version": "1.0.0",
+    "author": "Praxis Works",
+    "description": "Supplier renewal risk Agreement Manager manifest for the Docusign Renewal Risk Agent demo.",
+    "tags": [
+      "docusign",
+      "agreement-manager",
+      "renewal-risk",
+      "supplier-agreements"
+    ],
+    "lastManifestHash": ""
+  }
+}
