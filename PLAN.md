@@ -28,11 +28,11 @@ The preview UI (`src/app/page.tsx`) shows only the discovery table — no risk c
 
 ## Phase 1 — Carry full extracted fields through discovery
 
-The blocking schema gap: `renewalAgreementTableRowSchema` lacks `noticePeriodDays`, `hasTerminationForConvenience`, `terminationFee`, and `agreementStatus` — all of which `classifyRenewalRisk` needs. The risk step can't run on today's discovery output.
+The original blocking schema gap was that `renewalAgreementTableRowSchema` lacked `noticePeriodDays`, `hasTerminationForConvenience`, `terminationFee`, and `agreementStatus` — all of which `classifyRenewalRisk` needs. The row contract now carries those fields, and the remaining risk is live sandbox extraction quality.
 
-- [ ] Extend the discovery row schema (or attach a nested `extracted` object) so each row carries every field in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
-- [ ] Update the Intake Agent workflow prompt to request/normalize those fields and list them in `source.missingFields` when absent.
-- [ ] Add a row → `SupplierRenewalAgreement` mapper (nulls → the "not extracted" conventions the classifier already handles).
+- [x] Extend the discovery row schema (or attach a nested `extracted` object) so each row carries every field in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
+- [x] Update the Intake Agent workflow prompt to request/normalize those fields and list them in `source.missingFields` when absent.
+- [x] Add a row → `SupplierRenewalAgreement` mapper (nulls → the "not extracted" conventions the classifier already handles).
 - [ ] `npm run inspect:mcp discover <date>` and confirm the new fields come back against the sandbox.
 
 ## Phase 2 — Risk Review step in the Mastra workflow

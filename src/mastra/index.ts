@@ -9,7 +9,13 @@ import { intakeAgent } from './agents/intake-agent';
 import { renewalDiscoveryWorkflow } from './workflows/renewal-discovery-workflow';
 
 export { intakeAgent } from './agents/intake-agent';
-export { createRenewalRiskBrief, classifyRenewalRisk } from './tools/portfolio-tools';
+export {
+  classifyRenewalRisk,
+  createRenewalRiskBrief,
+  mapRenewalRowsToAgreements,
+  mapRenewalRowToAgreement,
+  renewalRiskSeverityOrder,
+} from './tools/portfolio-tools';
 export {
   renewalDiscoveryWorkflow,
   runRenewalDiscoveryWorkflow,
