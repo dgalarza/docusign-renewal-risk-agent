@@ -1,6 +1,9 @@
 output.txt
 node_modules
 dist
+.next
+out
+tsconfig.tsbuildinfo
 .mastra
 .env.development
 .env
@@ -10,4 +13,3 @@ dist
 *.duckdb.wal
 .netlify
 .vercel
-

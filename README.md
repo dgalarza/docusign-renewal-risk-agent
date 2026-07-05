@@ -34,7 +34,8 @@ The project starts from completed supplier agreements, not draft agreement intak
 ```text
 docs/       Concept, architecture, and Docusign surface notes.
 examples/   Sample completed supplier agreement portfolio.
-src/        Domain schemas and workflow helper functions.
+src/app/    Lightweight Next.js preview app and API route.
+src/mastra/ Domain schemas, agents, tools, and workflows.
 ```
 
 ## Getting Started
@@ -44,5 +45,22 @@ npm install
 npm test
 ```
 
-The first implementation target is a local end-to-end workflow over the sample portfolio. Live Docusign MCP/API calls should be added after the local domain model and preview are stable.
+## Docusign MCP Renewal Discovery
 
+The preview path calls Docusign MCP and labels the table source as
+`Docusign MCP`. There is no fixture fallback; MCP errors and missing Docusign
+fields are shown directly.
+
+1. Copy `.env.example` to `.env` and fill in the local Docusign sandbox values.
+   Do not commit `.env`, access tokens, refresh tokens, client secrets, or
+   account-specific credentials.
+2. Run `npm run auth:docusign` to complete the Docusign OAuth flow and paste the
+   returned token values into `.env`.
+3. Run `npm run inspect:mcp` to verify MCP tool discovery.
+4. Run `npm run inspect:mcp discover 2026-07-05` to run the Intake Agent
+   workflow. The agent receives Docusign MCP tools through Mastra
+   `MCPClient.listTools()` and calls Agreement Manager before rows are
+   normalized for the preview table.
+5. Run `npm run preview:app` and open `http://127.0.0.1:4173/`.
+   The Next.js preview page waits for the Discover button before invoking the
+   Mastra renewal discovery workflow.

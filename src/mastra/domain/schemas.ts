@@ -29,6 +29,48 @@ export const supplierRenewalAgreementSchema = z.object({
   businessOwner: z.string(),
 });
 
+export const renewalAgreementSourceSchema = z.object({
+  system: z.literal('docusign_mcp'),
+  toolName: z.string().optional(),
+  recordId: z.string().optional(),
+  recordUrl: z.string().optional(),
+  rawStatus: z.string().optional(),
+  missingFields: z.array(z.string()),
+});
+
+export const renewalAgreementTableRowSchema = z.object({
+  agreementId: z.string(),
+  supplier: z.string(),
+  agreementTitle: z.string(),
+  renewalDate: z.string().nullable(),
+  noticeDeadline: z.string().nullable(),
+  daysUntilNoticeDeadline: z.number().nullable(),
+  agreementValue: z.number().nullable(),
+  currency: z.string(),
+  renewalType: renewalTypeSchema,
+  businessOwner: z.string(),
+  source: renewalAgreementSourceSchema,
+});
+
+export const renewalDiscoveryStatusSchema = z.enum([
+  'live',
+  'empty',
+  'missing_fields',
+  'error',
+]);
+
+export const renewalDiscoveryResultSchema = z.object({
+  status: renewalDiscoveryStatusSchema,
+  sourceLabel: z.string(),
+  asOfDate: z.string(),
+  reviewWindowDays: z.number(),
+  message: z.string(),
+  rows: z.array(renewalAgreementTableRowSchema),
+  availableTools: z.array(z.string()),
+  selectedTool: z.string().nullable(),
+  errors: z.array(z.string()),
+});
+
 export const renewalRiskFindingSchema = z.object({
   agreementId: z.string(),
   supplierName: z.string(),
@@ -63,8 +105,11 @@ export const followUpPlanSchema = z.object({
 });
 
 export type SupplierRenewalAgreement = z.infer<typeof supplierRenewalAgreementSchema>;
+export type RenewalType = z.infer<typeof renewalTypeSchema>;
+export type RenewalAgreementSource = z.infer<typeof renewalAgreementSourceSchema>;
+export type RenewalAgreementTableRow = z.infer<typeof renewalAgreementTableRowSchema>;
+export type RenewalDiscoveryResult = z.infer<typeof renewalDiscoveryResultSchema>;
 export type RenewalRiskFinding = z.infer<typeof renewalRiskFindingSchema>;
 export type RenewalRiskBrief = z.infer<typeof renewalRiskBriefSchema>;
 export type HumanDecision = z.infer<typeof humanDecisionSchema>;
 export type FollowUpPlan = z.infer<typeof followUpPlanSchema>;
-
