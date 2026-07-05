@@ -46,7 +46,7 @@ npm test
 ```
 
 `npm test` runs the TypeScript typecheck and the deterministic policy-engine
-verification script (`npm run verify:policy`). The policy check validates
+test (`npm run test:policy`). The policy test validates
 `examples/agreement-demo-fixture.json` with `asOfDate=2026-07-01` plus focused
 missing-field and row-normalization cases.
 
