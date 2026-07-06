@@ -15,7 +15,7 @@ The project starts from completed supplier agreements, not draft agreement intak
 3. Agreement Manager extracts renewal terms and related structured fields.
 4. A custom agent finds supplier agreements renewing in the next 90 days.
 5. The workflow invokes a risk-review agent, which calls deterministic policy
-   tools to classify renewal exposure.
+   tools for classifications and then applies judgment about review priority.
 6. A human reviewer approves the follow-up action.
 7. Workflow Builder routes the approved follow-up.
 
@@ -66,6 +66,8 @@ The command emits the same workflow result shape as the live path:
   `reviewWindowDays`, `agreementsReviewed`, and per-agreement `findings`.
 - each finding includes `classification`, `recommendedAction`, `rationale`,
   `daysUntilNoticeDeadline`, and `extractedSignals`.
+- `riskReview`: Risk Review Agent judgment with the portfolio readout,
+  priority agreement order, and reviewer guidance.
 
 ## Docusign MCP Renewal Discovery
 
@@ -87,8 +89,9 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
    workflow invokes the Intake Agent, which receives Docusign MCP tools through
    Mastra `MCPClient.listTools()` and calls Agreement Manager before rows are
    normalized for the preview table. The workflow then invokes the Risk Review
-   Agent, which calls the deterministic renewal-risk policy tool and returns a
-   validated risk brief.
+   Agent, which calls the deterministic renewal-risk policy tool, returns a
+   validated risk brief, and adds reviewer-facing judgment without changing
+   policy classifications.
 5. Run `npm run dev` to start the Mastra API and Studio on
    `http://127.0.0.1:4111/`.
 6. Run `npm run preview:app` and open `http://localhost:4173/`.
@@ -111,8 +114,8 @@ discovery executes:
    individual MCP calls surface as `workflow-step-output` chunks.
 4. The risk-review step maps discovery rows into policy-ready agreements, then
    invokes the Risk Review Agent. The agent calls `createRenewalRiskBriefTool`
-   so the deterministic policy produces the `riskBrief`, and both the agent
-   output and enclosing workflow result are schema-validated.
+   so the deterministic policy produces the `riskBrief`; then the agent adds a
+   validated `riskReview` judgment layer for human prioritization.
 5. The route translates chunks into `progress` server-sent events and closes
    with a final `result` (or `failure`) event.
 

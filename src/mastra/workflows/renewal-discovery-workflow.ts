@@ -5,10 +5,12 @@ import {
   renewalAgreementTableRowSchema,
   renewalDiscoveryResultSchema,
   renewalRiskBriefSchema,
+  renewalRiskAgentJudgmentSchema,
   renewalReviewWorkflowResultSchema,
   supplierRenewalAgreementSchema,
   type RenewalAgreementTableRow,
   type RenewalDiscoveryResult,
+  type RenewalRiskAgentJudgment,
   type RenewalReviewWorkflowResult,
   type SupplierRenewalAgreement,
 } from '../domain/schemas';
@@ -157,6 +159,7 @@ const riskReviewStep = createStep({
 
     const agreements = mapRenewalRowsToAgreements(inputData.rows);
     let riskBrief: RenewalReviewWorkflowResult['riskBrief'] = null;
+    let riskReview: RenewalRiskAgentJudgment | null = null;
 
     if (agreements.length > 0) {
       if (!mastra) {
@@ -181,7 +184,7 @@ const riskReviewStep = createStep({
           maxSteps: 4,
           runId: `workflow-risk-review-${inputData.asOfDate}`,
           toolChoice: { type: 'tool', toolName: 'createRenewalRiskBriefTool' },
-          structuredOutput: { schema: renewalRiskBriefSchema },
+          structuredOutput: { schema: renewalRiskAgentJudgmentSchema },
           onChunk: chunk => {
             if (chunk.type === 'tool-call') {
               emitProgress({
@@ -200,8 +203,8 @@ const riskReviewStep = createStep({
         },
       );
 
-      renewalRiskBriefSchema.parse(agentResult.object);
       riskBrief = extractRiskBriefToolResult(agentResult);
+      riskReview = renewalRiskAgentJudgmentSchema.parse(agentResult.object);
     }
 
     const result = renewalReviewWorkflowResultSchema.parse({
@@ -210,6 +213,7 @@ const riskReviewStep = createStep({
         ? `${inputData.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
         : `${inputData.message} Risk review found no agreements to classify.`,
       riskBrief,
+      riskReview,
     });
 
     emitProgress({
@@ -240,8 +244,19 @@ const buildRiskReviewAgentPrompt = (input: {
   reviewWindowDays: number;
 }) => `Create the renewal risk brief for these policy-ready supplier agreements.
 
-Use createRenewalRiskBriefTool as the source of truth. Do not classify agreements yourself.
-Return one RenewalRiskBrief JSON object that exactly reflects the deterministic tool output.
+First call createRenewalRiskBriefTool. Treat that tool result as the source of truth for:
+- classifications
+- recommended actions
+- notice-deadline math
+- extracted signals
+
+Then apply procurement judgment for the human reviewer. You may prioritize, summarize, and explain what a reviewer should focus on, but do not change any policy classification or recommended action.
+
+Return one RenewalRiskAgentJudgment JSON object:
+- portfolioJudgment should state the practical renewal-risk readout.
+- priorityAgreementIds should order the agreements a human should review first.
+- reviewerGuidance should include judgment and reasonForPriority for each reviewed agreement.
+- suggestedReviewer must be one of procurement_owner, legal, executive_escalation, or none.
 
 Tool input:
 ${JSON.stringify(
@@ -347,6 +362,7 @@ export const runRenewalDiscoveryWorkflow = async (
       selectedTool: null,
       errors: ['error' in workflowResult ? [workflowResult.error.message].filter(Boolean).join(': ') : workflowResult.status],
       riskBrief: null,
+      riskReview: null,
     };
   }
 
@@ -381,6 +397,7 @@ export const runRenewalFixtureReview = async (
       ? `${discoveryResult.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
       : `${discoveryResult.message} Risk review found no agreements to classify.`,
     riskBrief,
+    riskReview: null,
   });
 };
 

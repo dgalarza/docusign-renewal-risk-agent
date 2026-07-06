@@ -11,9 +11,10 @@ flowchart LR
   G --> H["Renewal Risk Agent"]
   H --> I["Deterministic Policy Tool"]
   I --> J["Renewal Risk Brief"]
-  J --> K["Human Approval"]
-  K --> L["Workflow Builder Follow-Up"]
-  K --> M["Decision Trail"]
+  J --> K["Agent Review Judgment"]
+  K --> L["Human Approval"]
+  L --> M["Workflow Builder Follow-Up"]
+  L --> N["Decision Trail"]
 ```
 
 ## Agent Roles
@@ -30,8 +31,8 @@ flowchart LR
 - Invoked by the Mastra workflow after intake, not by direct agent-to-agent handoff.
 - Reviews each agreement against the procurement renewal policy.
 - Classifies renewal risk through deterministic policy tools.
-- Explains the reasoning.
-- Recommends one follow-up action per agreement.
+- Uses the policy output to judge review priority and likely reviewer.
+- Explains the reasoning without changing classifications or recommended actions.
 - Produces a structured portfolio-level renewal-risk brief.
 
 ### Human Reviewer

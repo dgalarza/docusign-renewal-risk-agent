@@ -144,6 +144,7 @@ export default function RenewalDiscoveryPage() {
         selectedTool: null,
         errors: [message],
         riskBrief: null,
+        riskReview: null,
       });
       setStatus('error');
       pushEntry('error', 'Run failed', message);
@@ -219,6 +220,9 @@ export default function RenewalDiscoveryPage() {
           <ResultBar result={result} status={status} />
 
           {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
+          {result?.riskReview ? (
+            <RiskReviewPanel rows={rows} riskReview={result.riskReview} />
+          ) : null}
 
           <section className="overflow-x-auto rounded-lg border bg-card">
             <Table className="min-w-[1480px]">
@@ -426,6 +430,67 @@ function StatTile({
       {detail ? <p className="m-0 truncate text-xs text-muted-foreground">{detail}</p> : null}
     </div>
   );
+}
+
+function RiskReviewPanel({
+  rows,
+  riskReview,
+}: {
+  rows: RenewalAgreementTableRow[];
+  riskReview: NonNullable<RenewalReviewWorkflowResult['riskReview']>;
+}) {
+  const supplierByAgreementId = new Map(rows.map(row => [row.agreementId, row.supplier]));
+  const priorityLabels = riskReview.priorityAgreementIds
+    .map(agreementId => supplierByAgreementId.get(agreementId) ?? agreementId)
+    .slice(0, 3);
+
+  return (
+    <section className="rounded-lg border bg-card px-4 py-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+        <div>
+          <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-accent-foreground">
+            Risk Review Agent judgment
+          </p>
+          <p className="mt-2 text-sm leading-6 text-foreground">
+            {riskReview.portfolioJudgment}
+          </p>
+          {priorityLabels.length > 0 ? (
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              Review first: {priorityLabels.join(', ')}
+            </p>
+          ) : null}
+        </div>
+        <div className="grid gap-3">
+          {riskReview.reviewerGuidance.slice(0, 3).map(guidance => (
+            <div key={guidance.agreementId} className="border-l-2 border-accent-foreground pl-3">
+              <div className="text-sm font-medium text-foreground">
+                {supplierByAgreementId.get(guidance.agreementId) ?? guidance.agreementId}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {guidance.judgment}
+              </p>
+              <p className="mt-1 font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                {formatSuggestedReviewer(guidance.suggestedReviewer)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatSuggestedReviewer(
+  reviewer: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number]['suggestedReviewer'],
+) {
+  const labels: Record<typeof reviewer, string> = {
+    procurement_owner: 'Procurement owner',
+    legal: 'Legal',
+    executive_escalation: 'Executive escalation',
+    none: 'No reviewer',
+  };
+
+  return labels[reviewer];
 }
 
 function AgreementRow({

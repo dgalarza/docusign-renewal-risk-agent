@@ -36,6 +36,8 @@ export type {
   HumanDecision,
   RenewalAgreementTableRow,
   RenewalDiscoveryResult,
+  RenewalRiskAgentGuidance,
+  RenewalRiskAgentJudgment,
   RenewalReviewWorkflowResult,
   RenewalRiskBrief,
   RenewalRiskFinding,
