@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   renewalAgreementTableRowSchema,
   renewalDiscoveryResultSchema,
+  renewalRiskBriefSchema,
   renewalReviewWorkflowResultSchema,
   supplierRenewalAgreementSchema,
   type RenewalAgreementTableRow,
@@ -21,7 +22,14 @@ const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', im
 
 export type RenewalDiscoveryProgress = {
   type: 'renewal-progress';
-  kind: 'intake' | 'tool-call' | 'tool-result' | 'normalize' | 'risk-review';
+  kind:
+    | 'intake'
+    | 'tool-call'
+    | 'tool-result'
+    | 'normalize'
+    | 'risk-review'
+    | 'policy-tool-call'
+    | 'policy-tool-result';
   label: string;
   detail: string | null;
 };
@@ -141,10 +149,6 @@ const riskReviewStep = createStep({
         .catch(() => {});
     };
 
-    if (mastra) {
-      mastra.getAgent('riskReviewAgent');
-    }
-
     emitProgress({
       kind: 'risk-review',
       label: 'Risk Review Agent engaged',
@@ -152,13 +156,53 @@ const riskReviewStep = createStep({
     });
 
     const agreements = mapRenewalRowsToAgreements(inputData.rows);
-    const riskBrief =
-      agreements.length > 0
-        ? createRenewalRiskBrief(agreements, {
-            asOfDate: inputData.asOfDate,
-            reviewWindowDays: inputData.reviewWindowDays,
-          })
-        : null;
+    let riskBrief: RenewalReviewWorkflowResult['riskBrief'] = null;
+
+    if (agreements.length > 0) {
+      if (!mastra) {
+        throw new Error('Mastra instance is required to resolve the Risk Review Agent.');
+      }
+
+      const riskReviewAgent = mastra.getAgent('riskReviewAgent');
+
+      emitProgress({
+        kind: 'risk-review',
+        label: 'Risk Review Agent reviewing policy-ready agreements',
+        detail: `${agreements.length} ${agreements.length === 1 ? 'agreement' : 'agreements'} mapped from discovery rows`,
+      });
+
+      const agentResult = await riskReviewAgent.generate(
+        buildRiskReviewAgentPrompt({
+          agreements,
+          asOfDate: inputData.asOfDate,
+          reviewWindowDays: inputData.reviewWindowDays,
+        }),
+        {
+          maxSteps: 4,
+          runId: `workflow-risk-review-${inputData.asOfDate}`,
+          toolChoice: { type: 'tool', toolName: 'createRenewalRiskBriefTool' },
+          structuredOutput: { schema: renewalRiskBriefSchema },
+          onChunk: chunk => {
+            if (chunk.type === 'tool-call') {
+              emitProgress({
+                kind: 'policy-tool-call',
+                label: `Risk Review Agent calling ${chunk.payload.toolName}`,
+                detail: 'Deterministic renewal policy classifying agreements',
+              });
+            } else if (chunk.type === 'tool-result') {
+              emitProgress({
+                kind: 'policy-tool-result',
+                label: `${chunk.payload.toolName} returned policy brief`,
+                detail: null,
+              });
+            }
+          },
+        },
+      );
+
+      renewalRiskBriefSchema.parse(agentResult.object);
+      riskBrief = extractRiskBriefToolResult(agentResult);
+    }
 
     const result = renewalReviewWorkflowResultSchema.parse({
       ...inputData,
@@ -188,6 +232,51 @@ const describeToolArgs = (args: unknown): string | null => {
   const reviewStatus = (args as Record<string, unknown>).review_status;
 
   return typeof reviewStatus === 'string' ? `Review status ${reviewStatus}` : null;
+};
+
+const buildRiskReviewAgentPrompt = (input: {
+  agreements: SupplierRenewalAgreement[];
+  asOfDate: string;
+  reviewWindowDays: number;
+}) => `Create the renewal risk brief for these policy-ready supplier agreements.
+
+Use createRenewalRiskBriefTool as the source of truth. Do not classify agreements yourself.
+Return one RenewalRiskBrief JSON object that exactly reflects the deterministic tool output.
+
+Tool input:
+${JSON.stringify(
+  {
+    agreements: input.agreements,
+    asOfDate: input.asOfDate,
+    reviewWindowDays: input.reviewWindowDays,
+  },
+  null,
+  2,
+)}`;
+
+const extractRiskBriefToolResult = (agentResult: unknown) => {
+  const toolResults = (agentResult as { toolResults?: unknown }).toolResults;
+
+  if (!Array.isArray(toolResults)) {
+    throw new Error('Risk Review Agent did not return deterministic policy tool results.');
+  }
+
+  const policyToolResult = toolResults.find(result => {
+    if (!result || typeof result !== 'object') {
+      return false;
+    }
+
+    const toolName = (result as Record<string, unknown>).toolName;
+    return toolName === 'createRenewalRiskBriefTool' || toolName === 'create-renewal-risk-brief';
+  });
+
+  const output =
+    policyToolResult && typeof policyToolResult === 'object'
+      ? ((policyToolResult as Record<string, unknown>).result ??
+        (policyToolResult as Record<string, unknown>).output)
+      : null;
+
+  return renewalRiskBriefSchema.parse(output);
 };
 
 const buildIntakeAgentRenewalPrompt = (input: {

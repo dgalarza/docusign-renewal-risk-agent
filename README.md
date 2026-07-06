@@ -14,7 +14,8 @@ The project starts from completed supplier agreements, not draft agreement intak
 2. IAM Toolkit defines and tests custom extraction fields for renewal-risk analysis.
 3. Agreement Manager extracts renewal terms and related structured fields.
 4. A custom agent finds supplier agreements renewing in the next 90 days.
-5. A risk-review agent classifies renewal exposure.
+5. The workflow invokes a risk-review agent, which calls deterministic policy
+   tools to classify renewal exposure.
 6. A human reviewer approves the follow-up action.
 7. Workflow Builder routes the approved follow-up.
 
@@ -82,11 +83,12 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
 2. Run `npm run auth:docusign` to complete the Docusign OAuth flow and paste the
    returned token values into `.env`.
 3. Run `npm run inspect:mcp` to verify MCP tool discovery.
-4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the Intake Agent
-   workflow. The agent receives Docusign MCP tools through Mastra
-   `MCPClient.listTools()` and calls Agreement Manager before rows are
-   normalized for the preview table and classified by the deterministic risk
-   policy.
+4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the workflow. The
+   workflow invokes the Intake Agent, which receives Docusign MCP tools through
+   Mastra `MCPClient.listTools()` and calls Agreement Manager before rows are
+   normalized for the preview table. The workflow then invokes the Risk Review
+   Agent, which calls the deterministic renewal-risk policy tool and returns a
+   validated risk brief.
 5. Run `npm run dev` to start the Mastra API and Studio on
    `http://127.0.0.1:4111/`.
 6. Run `npm run preview:app` and open `http://localhost:4173/`.
@@ -107,9 +109,10 @@ discovery executes:
 3. Inside the intake workflow step, the Intake Agent's `onChunk` callback forwards
    each Docusign MCP `tool-call` / `tool-result` through the step `writer`, so
    individual MCP calls surface as `workflow-step-output` chunks.
-4. The risk-review step maps discovery rows into policy-ready agreements,
-   creates a deterministic `riskBrief`, and emits progress for the classification
-   summary.
+4. The risk-review step maps discovery rows into policy-ready agreements, then
+   invokes the Risk Review Agent. The agent calls `createRenewalRiskBriefTool`
+   so the deterministic policy produces the `riskBrief`, and both the agent
+   output and enclosing workflow result are schema-validated.
 5. The route translates chunks into `progress` server-sent events and closes
    with a final `result` (or `failure`) event.
 
