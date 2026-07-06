@@ -100,6 +100,7 @@ const intakeAgentFindRenewalsStep = createStep({
       buildIntakeAgentRenewalPrompt({
         request: inputData.request,
         asOfDate,
+        accountId: process.env.DOCUSIGN_ACCOUNT_ID,
         reviewWindowDays: inputData.reviewWindowDays,
       }),
       {
@@ -435,16 +436,24 @@ const getSuggestedReviewer = (
 const buildIntakeAgentRenewalPrompt = (input: {
   request: string;
   asOfDate: string;
+  accountId?: string;
   reviewWindowDays: number;
-}) => `Request: ${input.request}
+}) => {
+  const discoverySteps = input.accountId
+    ? `1. Use accountId "${input.accountId}". Do not call docusign_getUserInfo.
+2. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
+   { "accountId": "${input.accountId}", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }`
+    : `1. Call docusign_getUserInfo.
+2. Use the default account_id from that response.
+3. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
+   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }`;
+
+  return `Request: ${input.request}
 
 Use Docusign MCP to find completed supplier agreements for renewal review.
 
 Steps:
-1. Call docusign_getUserInfo.
-2. Use the default account_id from that response.
-3. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
-   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }
+${discoverySteps}
 
 Return one RenewalDiscoveryResult JSON object:
 - sourceLabel must be "Docusign MCP".
@@ -466,6 +475,7 @@ Return one RenewalDiscoveryResult JSON object:
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 
 Do not add OData filters or renewal-date filters. Do not invent fields that Docusign did not return.`;
+};
 
 export const renewalDiscoveryWorkflow = createWorkflow({
   id: 'renewal-discovery-workflow',
