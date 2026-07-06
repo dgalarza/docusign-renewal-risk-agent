@@ -17,7 +17,8 @@ The project starts from completed supplier agreements, not draft agreement intak
 5. The workflow creates a deterministic policy brief, then invokes the
    risk-review agent for judgment about review priority.
 6. A human reviewer approves the follow-up action.
-7. Workflow Builder routes the approved follow-up.
+7. The preview prepares or starts a Docusign Workflow Builder follow-up through
+   the Docusign MCP workflow tools.
 
 ## Docusign Surface Roles
 
@@ -101,6 +102,25 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
    the Mastra workflow configured by `MASTRA_API_URL` before rendering the
    returned table contract.
 
+## Human Approval and Workflow Builder
+
+After discovery and risk review, select an agreement row to approve the
+recommended action, override it, or reject follow-up. The preview posts the
+human decision to `POST /api/renewals/decisions`, which:
+
+- validates the selected row, policy finding, and human decision;
+- creates a deterministic `followUpPlan`;
+- records a local JSONL decision trail under `.mastra/`;
+- calls `docusign_getWorkflowTriggerRequirements` to prepare the Workflow
+  Builder handoff when `DOCUSIGN_WORKFLOW_ID` and `DOCUSIGN_ACCOUNT_ID` are
+  configured;
+- calls `docusign_triggerWorkflow` only when
+  `DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=true`.
+
+Keep `DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=false` for dry-run recording. Turn it
+on only when the sandbox workflow is published and you want approvals to create
+live Workflow Builder instances.
+
 ## Live Run Progress
 
 The preview page shows incremental workflow progress in a run ledger while
@@ -117,7 +137,9 @@ discovery executes:
 4. The risk-review step maps discovery rows into policy-ready agreements,
    creates the deterministic `riskBrief`, and invokes the Risk Review Agent for
    a bounded, validated `riskReview` judgment layer over the top findings.
-5. The route translates chunks into `progress` server-sent events and closes
+5. The preview human-approval panel appends approval and Workflow Builder
+   handoff events to the run ledger after a decision.
+6. The route translates chunks into `progress` server-sent events and closes
    with a final `result` (or `failure`) event.
 
 `GET /api/renewals` remains as the non-streaming JSON path over
