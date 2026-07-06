@@ -14,10 +14,11 @@ export type LedgerPhase = 'idle' | 'recording' | 'complete' | 'failed';
 
 const PLANNED_STATIONS = [
   'Workflow dispatched to Mastra',
-  'Intake Agent engaged',
-  'Docusign MCP queries',
+  'Intake Agent · Docusign MCP discovery',
   'Agreement rows normalized',
-  'Results returned',
+  'Deterministic policy brief created',
+  'Risk Review Agent judgment applied',
+  'Risk brief returned',
 ];
 
 const phaseLabels: Record<LedgerPhase, string> = {
