@@ -405,7 +405,7 @@ const buildFindingJudgment = (finding: RenewalRiskFinding) => {
   }
 
   if (finding.recommendedAction === 'legal_review') {
-    return `${finding.supplierName} should go to legal because the extracted renewal or termination terms are not safe to accept as-is.`;
+    return `${finding.supplierName} should go to legal because the extracted renewal terms are not safe to accept as-is.`;
   }
 
   if (finding.classification === 'needs_review') {
@@ -463,15 +463,14 @@ Return one RenewalDiscoveryResult JSON object:
 - availableTools can be an empty array.
 - rows must use source.system "docusign_mcp" and source.toolName "${DOCUSIGN_AGREEMENT_TOOL}".
 - Include rows with renewalDate from ${input.asOfDate} through the next ${input.reviewWindowDays} days.
-- Include agreementStatus, noticePeriodDays, hasTerminationForConvenience, and terminationFee when Docusign returns them.
+- Include noticePeriodDays when Docusign returns it.
 - If Docusign returns renewalDate and noticePeriodDays but not noticeDeadline, calculate noticeDeadline as renewalDate minus noticePeriodDays.
 - If noticeDeadline is available, calculate daysUntilNoticeDeadline from noticeDeadline and ${input.asOfDate}.
 - If Docusign does not return renewalDate, keep the row so the preview can show missing renewal fields.
-- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, agreementValue, agreementStatus, and hasTerminationForConvenience when Docusign did not return them.
-- Use "Not extracted" for supplier, agreementTitle, or terminationFee when Docusign did not return them.
-- Use "Unassigned" for businessOwner when Docusign did not return owner metadata. Missing businessOwner should not make a row incomplete.
+- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, and agreementValue when Docusign did not return them.
+- Use "Not extracted" for supplier or agreementTitle when Docusign did not return them.
 - Use renewalType "not_extracted" unless Docusign returns an explicit renewal type.
-- source.missingFields must list each missing required table field: supplier, agreementTitle, agreementStatus, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType, hasTerminationForConvenience, terminationFee.
+- source.missingFields must list each missing required table field: supplier, agreementTitle, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType.
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 
 Do not add OData filters or renewal-date filters. Do not invent fields that Docusign did not return.`;
@@ -585,7 +584,6 @@ const mapFixtureAgreementToRow = (
     agreementId: agreement.agreementId,
     supplier: agreement.supplierName,
     agreementTitle: agreement.agreementTitle,
-    agreementStatus: agreement.agreementStatus,
     renewalDate: agreement.renewalDate,
     noticePeriodDays: agreement.noticePeriodDays,
     noticeDeadline: agreement.noticeDeadline,
@@ -595,9 +593,6 @@ const mapFixtureAgreementToRow = (
     agreementValue: agreement.agreementValue,
     currency: agreement.currency,
     renewalType: agreement.renewalType,
-    hasTerminationForConvenience: agreement.hasTerminationForConvenience,
-    terminationFee: agreement.terminationFee,
-    businessOwner: agreement.businessOwner,
     source: {
       system: 'fixture',
       recordId: agreement.agreementId,

@@ -110,16 +110,6 @@ export const classifyRenewalRisk = (
     });
   }
 
-  if (agreement.hasTerminationForConvenience !== true && renewalRiskPresent) {
-    extractedSignals.push('Termination for convenience was not extracted.');
-    candidateFindings.push({
-      classification: 'needs_review',
-      recommendedAction: 'legal_review',
-      rationale:
-        'The agreement lacks extracted termination-for-convenience rights. Legal should review before renewal.',
-    });
-  }
-
   const selectedFinding = selectHighestSeverity(candidateFindings);
 
   return {
@@ -139,7 +129,6 @@ export const mapRenewalRowToAgreement = (
   agreementId: row.agreementId,
   supplierName: row.supplier,
   agreementTitle: row.agreementTitle,
-  agreementStatus: row.agreementStatus,
   agreementValue: row.agreementValue,
   currency: row.currency,
   renewalType: row.renewalType,
@@ -148,9 +137,6 @@ export const mapRenewalRowToAgreement = (
   noticeDeadline:
     normalizeIsoDate(row.noticeDeadline) ??
     deriveNoticeDeadline(row.renewalDate, row.noticePeriodDays),
-  hasTerminationForConvenience: row.hasTerminationForConvenience,
-  terminationFee: row.terminationFee,
-  businessOwner: row.businessOwner,
 });
 
 export const mapRenewalRowsToAgreements = (

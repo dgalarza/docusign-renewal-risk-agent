@@ -13,23 +13,17 @@ surface missing extraction data instead of inventing values.
 | --- | --- | --- | --- | --- | --- | --- |
 | `supplier_name` | `supplierName` / `supplier` | string | Yes | Extracted party or agreement metadata | `Brightline Office Supplies LLC` | Show `Not extracted`; add `supplier` to `source.missingFields`. |
 | `agreement_title` | `agreementTitle` | string | Yes | Agreement metadata | `Workplace Supplies Subscription Agreement` | Show `Not extracted`; add `agreementTitle` to `source.missingFields`. |
-| `agreement_status` | `agreementStatus` | enum | Yes | Agreement metadata | `completed` | Default only when MCP status clearly indicates completed; otherwise add `agreementStatus` to `source.missingFields`. |
 | `agreement_value` | `agreementValue` | number | Yes | Extracted commercial term or metadata | `82000` | Use `null`; add `agreementValue` to `source.missingFields`; the `$50k` rule cannot be evaluated. |
 | `currency` | `currency` | string | Yes | Extracted commercial term or metadata | `USD` | Use `USD` only when the account/demo default is known; otherwise add `currency` to `source.missingFields`. |
 | `renewal_type` | `renewalType` | enum | Yes | Extracted renewal provision | `auto_renews` | Use `not_extracted`; add `renewalType` to `source.missingFields`. |
 | `renewal_date` | `renewalDate` | ISO date string or `null` | Yes | Extracted renewal provision | `2026-10-15` | Use `null`; add `renewalDate` to `source.missingFields`; classify as needs review once policy runs. |
-| `notice_period_days` | `noticePeriodDays` | number or `null` | Yes | Extracted renewal/termination provision | `60` | Use `null`; add `noticePeriodDays` to `source.missingFields`; `noticeDeadline` cannot be derived. |
+| `notice_period_days` | `noticePeriodDays` | number or `null` | Yes | Extracted renewal provision | `60` | Use `null`; add `noticePeriodDays` to `source.missingFields`; `noticeDeadline` cannot be derived. |
 | `notice_deadline` | `noticeDeadline` | ISO date string or `null` | Yes | Derived by app or extracted directly | `2026-08-16` | Derive from `renewalDate - noticePeriodDays` when possible; otherwise use `null` and add `noticeDeadline` to `source.missingFields`. |
-| `has_termination_for_convenience` | `hasTerminationForConvenience` | boolean or `null` | Yes | Extracted termination provision | `false` | Use `null`; add `hasTerminationForConvenience` to `source.missingFields`; policy should route for legal review. |
-| `termination_fee` | `terminationFee` | string | No | Extracted termination provision | `None after current term` | Use `Not extracted`; add `terminationFee` to `source.missingFields` only when the field is expected for the record. |
-| `business_owner` | `businessOwner` | string | No | Docusign metadata, custom field, or ingest metadata | `Procurement Ops` | Show `Unassigned` or `Not provided`; do not treat as an extraction failure. |
 | Docusign agreement ID | `agreementId` / `source.recordId` | string | Yes | Docusign source metadata | `demo-brightline-001` | Drop the row only if no stable ID is available. |
 | Docusign agreement URL | `source.recordUrl` | string or omitted | No | Docusign source metadata | Docusign agreement URL | Omit when unavailable. |
 
 ## Normalization Rules
 
-- `agreementStatus` should normalize to `completed` for completed Agreement
-  Manager records and `uploaded_historical` for historical/imported records.
 - `renewalType` must normalize to one of `auto_renews`, `manual_renewal`,
   `evergreen`, `none`, or `not_extracted`.
 - `noticeDeadline` should be calculated when `renewalDate` and
@@ -38,8 +32,6 @@ surface missing extraction data instead of inventing values.
 - `daysUntilNoticeDeadline` should be calculated from `asOfDate` and
   `noticeDeadline`; keep it `null` when the deadline is missing.
 - `agreementValue` should be a number without currency symbols or commas.
-- `terminationFee` can remain a short text summary because the first policy pass
-  only needs to know whether termination for convenience exists.
 
 ## Missing-Data Semantics
 
@@ -52,11 +44,6 @@ kept in `source.missingFields` so the later policy engine can distinguish:
   review.
 - Missing `agreementValue`: the `$50k` rule cannot be evaluated; route to needs
   review when other renewal risk is present.
-- Missing `hasTerminationForConvenience`: legal-review path, because the buyer's
-  exit right is unknown.
-- Missing `businessOwner`: do not block risk review. Route follow-up to a
-  configured workflow owner, review queue, or fixed demo recipient until owner
-  resolution is added.
 
 ## IAM Toolkit Setup Notes
 
@@ -78,11 +65,10 @@ Suggested sandbox workflow:
 9. Run the extraction test and compare results against
    `examples/agreement-demo-fixture.json`.
 
-For fields that do not naturally live in the agreement text, such as
-`business_owner`, supply metadata during ingestion or configure the field as a
-metadata/custom field instead of expecting AI extraction from the PDF. The demo
-should not require this field for classification; Workflow Builder routing can
-use a separate configured owner or review queue.
+The demo intentionally excludes ownership and termination-right extraction from
+the policy pass because those fields are not consistently available from the
+sandbox MCP path. Workflow Builder routing can use a configured owner or review
+queue outside this extraction contract.
 
 References:
 

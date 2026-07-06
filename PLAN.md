@@ -28,9 +28,9 @@ The preview UI (`src/app/page.tsx`) shows only the discovery table — no risk c
 
 ## Phase 1 — Carry full extracted fields through discovery
 
-The original blocking schema gap was that `renewalAgreementTableRowSchema` lacked `noticePeriodDays`, `hasTerminationForConvenience`, `terminationFee`, and `agreementStatus` — all of which `classifyRenewalRisk` needs. The row contract now carries those fields, and the remaining risk is live sandbox extraction quality.
+The original blocking schema gap was that `renewalAgreementTableRowSchema` lacked the renewal timing fields the deterministic policy needs, especially `noticePeriodDays`. The row contract now carries those fields, and the remaining risk is live sandbox extraction quality.
 
-- [x] Extend the discovery row schema (or attach a nested `extracted` object) so each row carries every field in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
+- [x] Extend the discovery row schema so each row carries the policy-relevant fields in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
 - [x] Update the Intake Agent workflow prompt to request/normalize those fields and list them in `source.missingFields` when absent.
 - [x] Add a row → `SupplierRenewalAgreement` mapper (nulls → the "not extracted" conventions the classifier already handles).
 - [ ] `npm run inspect:mcp discover <date>` and confirm the new fields come back against the sandbox.
@@ -41,7 +41,7 @@ Keep classification deterministic (defensible in the demo narrative: "policy is 
 
 - [x] Create `riskReviewAgent` (`src/mastra/agents/risk-review-agent.ts`) with the procurement policy from `docs/concept.md` in its instructions. Expose `classifyRenewalRisk` and `createRenewalRiskBrief` as Mastra tools (`createTool`) so classifications come from the deterministic policy, while the agent prioritizes and explains the human review path.
 - [x] Add a `risk-review` step to `renewalDiscoveryWorkflow` after intake: map rows → agreements, create and validate the deterministic `renewalRiskBriefSchema`, invoke `riskReviewAgent.generate(...)` for a bounded judgment pass, and include structured `riskReview` guidance alongside the discovery rows.
-- [x] Validate agent output against the fixture: run with `asOfDate=2026-07-01` and check the five expected classifications in `examples/agreement-demo-fixture.json` (needs_review / urgent / blocked / needs_review / needs_review).
+- [x] Validate agent output against the fixture: run with `asOfDate=2026-07-01` and check the five expected classifications in `examples/agreement-demo-fixture.json` (needs_review / urgent / blocked / standard / needs_review).
 - [x] Register the agent in `src/mastra/index.ts`.
 
 ## Phase 3 — Human approval checkpoint

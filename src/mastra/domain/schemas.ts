@@ -17,16 +17,12 @@ export const supplierRenewalAgreementSchema = z.object({
   agreementId: z.string(),
   supplierName: z.string(),
   agreementTitle: z.string(),
-  agreementStatus: z.enum(['completed', 'uploaded_historical']).nullable(),
   agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
   renewalDate: z.string().nullable(),
   noticePeriodDays: z.number().nullable(),
   noticeDeadline: z.string().nullable(),
-  hasTerminationForConvenience: z.boolean().nullable(),
-  terminationFee: z.string(),
-  businessOwner: z.string(),
 });
 
 export const renewalAgreementSourceSchema = z.object({
@@ -42,7 +38,6 @@ export const renewalAgreementTableRowSchema = z.object({
   agreementId: z.string(),
   supplier: z.string(),
   agreementTitle: z.string(),
-  agreementStatus: z.enum(['completed', 'uploaded_historical']).nullable(),
   renewalDate: z.string().nullable(),
   noticePeriodDays: z.number().nullable(),
   noticeDeadline: z.string().nullable(),
@@ -50,9 +45,6 @@ export const renewalAgreementTableRowSchema = z.object({
   agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
-  hasTerminationForConvenience: z.boolean().nullable(),
-  terminationFee: z.string(),
-  businessOwner: z.string(),
   source: renewalAgreementSourceSchema,
 });
 
