@@ -39,16 +39,16 @@ export type RenewalDiscoveryProgress = {
 export const renewalDiscoveryWorkflowInputSchema = z.object({
   request: z
     .string()
-    .default('Find supplier agreements renewing in the next 90 days.'),
+    .default('Find supplier agreements renewing in the next 45 days.'),
   source: z.enum(['docusign_mcp', 'fixture']).default('docusign_mcp'),
   asOfDate: z.string().optional(),
-  reviewWindowDays: z.number().default(90),
+  reviewWindowDays: z.number().default(45),
 });
 
 const intakeAgentFindRenewalsStep = createStep({
   id: 'intake-agent-find-renewals',
   description:
-    'Intake Agent queries Agreement Manager through Docusign MCP/API for supplier agreements renewing in the next 90 days.',
+    'Intake Agent queries Agreement Manager through Docusign MCP/API for supplier agreements renewing in the configured review window.',
   inputSchema: renewalDiscoveryWorkflowInputSchema,
   outputSchema: renewalDiscoveryResultSchema,
   execute: async ({ inputData, runId, mastra, writer }) => {
@@ -276,22 +276,55 @@ const extractRiskBriefToolResult = (agentResult: unknown) => {
     throw new Error('Risk Review Agent did not return deterministic policy tool results.');
   }
 
-  const policyToolResult = toolResults.find(result => {
-    if (!result || typeof result !== 'object') {
-      return false;
+  for (const result of toolResults) {
+    if (!isRenewalRiskBriefToolResult(result)) {
+      continue;
     }
 
-    const toolName = (result as Record<string, unknown>).toolName;
-    return toolName === 'createRenewalRiskBriefTool' || toolName === 'create-renewal-risk-brief';
-  });
+    for (const candidate of getToolResultOutputCandidates(result)) {
+      const parsed = renewalRiskBriefSchema.safeParse(candidate);
 
-  const output =
-    policyToolResult && typeof policyToolResult === 'object'
-      ? ((policyToolResult as Record<string, unknown>).result ??
-        (policyToolResult as Record<string, unknown>).output)
-      : null;
+      if (parsed.success) {
+        return parsed.data;
+      }
+    }
+  }
 
-  return renewalRiskBriefSchema.parse(output);
+  throw new Error('Risk Review Agent did not return a valid deterministic renewal risk brief.');
+};
+
+const isRenewalRiskBriefToolResult = (result: unknown) => {
+  if (!result || typeof result !== 'object') {
+    return false;
+  }
+
+  const record = result as Record<string, unknown>;
+  const payload = record.payload;
+  const payloadRecord =
+    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  const toolName = record.toolName ?? record.name ?? payloadRecord?.toolName ?? payloadRecord?.name;
+
+  return toolName === 'createRenewalRiskBriefTool' || toolName === 'create-renewal-risk-brief';
+};
+
+const getToolResultOutputCandidates = (result: unknown) => {
+  if (!result || typeof result !== 'object') {
+    return [];
+  }
+
+  const record = result as Record<string, unknown>;
+  const payload = record.payload;
+  const payloadRecord =
+    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+
+  return [
+    record.result,
+    record.output,
+    payloadRecord?.result,
+    payloadRecord?.output,
+    payload,
+    result,
+  ];
 };
 
 const buildIntakeAgentRenewalPrompt = (input: {

@@ -11,7 +11,7 @@ Mapped against the 8-step demo flow in the Notion doc:
 | 1 | Completed agreements centralized in Agreement Manager | ✅ 5 fictional agreements (`examples/agreements/`) with upload-ready PDFs and a classifier fixture |
 | 2 | IAM Toolkit defines custom extraction fields | ✅ Documented (`examples/extraction-fields.md`); sandbox setup is manual and needs verification |
 | 3 | Agreement Manager extracts renewal terms | ⚠️ Depends on sandbox extraction actually populating the custom fields MCP returns |
-| 4 | Intake Agent queries via MCP for renewals in next 90 days | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
+| 4 | Intake Agent queries via MCP for renewals in the configured review window | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
 | 5 | Risk Review Agent reviews each agreement against policy | ✅ Workflow-orchestrated: `renewalDiscoveryWorkflow` invokes the Risk Review Agent, which calls deterministic policy tools for the `riskBrief` and adds review judgment |
 | 6 | Human reviewer approves the recommended action | ❌ `humanDecisionSchema` exists; no checkpoint, no UI |
 | 7 | Workflow Builder starts follow-up after approval | ❌ `createFollowUpPlan` exists as a pure function; not wired |

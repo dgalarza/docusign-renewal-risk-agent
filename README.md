@@ -13,7 +13,7 @@ The project starts from completed supplier agreements, not draft agreement intak
 1. Completed supplier agreements live in Docusign Agreement Manager.
 2. IAM Toolkit defines and tests custom extraction fields for renewal-risk analysis.
 3. Agreement Manager extracts renewal terms and related structured fields.
-4. A custom agent finds supplier agreements renewing in the next 90 days.
+4. A custom agent finds supplier agreements renewing inside the review window.
 5. The workflow invokes a risk-review agent, which calls deterministic policy
    tools for classifications and then applies judgment about review priority.
 6. A human reviewer approves the follow-up action.
@@ -74,6 +74,8 @@ The command emits the same workflow result shape as the live path:
 The preview path calls Docusign MCP and labels the table source as
 `Docusign MCP`. MCP errors and missing Docusign fields are shown directly; the
 fixture mode above is a local/demo command for repeatable risk-review runs.
+The preview defaults to a 45-day review window so the local demo reviews the
+most urgent agreements instead of every fixture document.
 
 The expected Agreement Manager field contract is documented in
 `docs/agreement-manager-field-mapping.md`. Use that document when configuring
