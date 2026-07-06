@@ -52,6 +52,14 @@ fields, custom agreement types, field mappings, AI training sets, and extraction
 testing. For this demo, use it to make the field names above real Agreement
 Manager fields and to validate extraction quality before relying on MCP output.
 
+This repo ships a concrete IAM Toolkit project at
+`docusign-iam/renewal-risk/` — the Agreement Manager manifest defines the
+custom agreement type and extraction fields (as `C_`-prefixed field keys such
+as `C_SupplierName` and `C_RenewalDate` that map to the snake_case names
+above), with training/test PDFs and a ground-truth testing CSV. Start from
+`docusign-iam/renewal-risk/README.md` instead of building the manifest by
+hand.
+
 Suggested sandbox workflow:
 
 1. Install and authenticate the Docusign Agreement CLI.

@@ -11,6 +11,8 @@ const DEFAULT_MASTRA_API_URL = 'http://127.0.0.1:4111/api';
 const RENEWAL_DISCOVERY_WORKFLOW_ID = 'renewalDiscoveryWorkflow';
 const RENEWAL_DISCOVERY_REQUEST =
   'Find supplier agreements renewing in the next 90 days.';
+// Mastra's workflow stream endpoint frames each JSON chunk with an ASCII
+// Record Separator (0x1E) rather than newlines, so the reader splits on it.
 const MASTRA_RECORD_SEPARATOR = '\x1E';
 
 type ProgressEvent = {
@@ -24,6 +26,12 @@ type MastraWorkflowChunk = {
   payload?: Record<string, unknown>;
 };
 
+/**
+ * SSE proxy between the browser and the Mastra workflow stream: it starts a
+ * renewalDiscoveryWorkflow run, reads the record-separated chunk stream, and
+ * translates workflow chunks into `progress` / `result` / `failure` events
+ * the preview page's EventSource understands.
+ */
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const asOfDate =
@@ -31,6 +39,10 @@ export async function GET(request: Request) {
   const reviewWindowDays = Number(
     requestUrl.searchParams.get('reviewWindowDays') ?? 90,
   );
+  // `source=fixture` runs the workflow against the bundled sample portfolio so
+  // the whole preview works without Docusign credentials.
+  const source =
+    requestUrl.searchParams.get('source') === 'fixture' ? 'fixture' : 'docusign_mcp';
   const runId = crypto.randomUUID();
 
   const encoder = new TextEncoder();
@@ -57,6 +69,7 @@ export async function GET(request: Request) {
                 request: RENEWAL_DISCOVERY_REQUEST,
                 asOfDate,
                 reviewWindowDays,
+                source,
               },
             }),
             cache: 'no-store',
@@ -217,6 +230,9 @@ const only = (event: ProgressEvent) => ({
 
 const none = () => ({ progress: [], result: null, failure: null });
 
+// The workflow steps emit custom `renewal-progress` events through the step
+// `writer`; Mastra nests them at varying depths inside workflow-step-output
+// payloads, so probe a few levels instead of assuming a fixed shape.
 const findRenewalProgress = (value: unknown, depth = 0): ProgressEvent | null => {
   if (!value || typeof value !== 'object' || depth > 4) {
     return null;

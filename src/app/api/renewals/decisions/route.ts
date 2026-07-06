@@ -28,6 +28,13 @@ const decisionRequestSchema = z.object({
   }),
 });
 
+/**
+ * Human approval checkpoint. The reviewer's decision arrives here from the
+ * preview UI; only after validation does the server build a follow-up plan,
+ * append the local JSONL decision trail, and — for approved or overridden
+ * actions — trigger the Docusign Workflow Builder follow-up through MCP.
+ * Rejected decisions and no_action overrides never reach Workflow Builder.
+ */
 export async function POST(request: Request) {
   try {
     const parsed = decisionRequestSchema.parse(await request.json());

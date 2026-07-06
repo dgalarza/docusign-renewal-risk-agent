@@ -1,6 +1,9 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
+// Imported (not read from disk) so the bundler inlines the sample portfolio:
+// the Mastra dev server bundles this module into .mastra/output/ and runs it
+// with a different working directory, so runtime file paths are unreliable.
+import fixtureJson from '../../../examples/agreement-demo-fixture.json';
 import {
   renewalAgreementTableRowSchema,
   renewalDiscoveryResultSchema,
@@ -21,7 +24,6 @@ import {
 } from '../tools/portfolio-tools';
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
-const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', import.meta.url);
 const RISK_REVIEW_AGENT_TIMEOUT_MS = 5_000;
 const RISK_REVIEW_AGENT_FINDING_LIMIT = 3;
 
@@ -107,6 +109,10 @@ const intakeAgentFindRenewalsStep = createStep({
         maxSteps: 5,
         runId: `workflow-${runId}-intake`,
         structuredOutput: { schema: renewalDiscoveryResultSchema },
+        // This bridge is what makes Docusign MCP visible in the demo UI: each
+        // MCP tool call the agent makes is forwarded through the workflow step
+        // `writer`, surfaces as a workflow-step-output chunk on the Mastra
+        // stream, and lands in the preview's run ledger as a progress event.
         onChunk: chunk => {
           if (chunk.type === 'tool-call') {
             emitProgress({
@@ -142,10 +148,18 @@ const intakeAgentFindRenewalsStep = createStep({
   },
 });
 
+// Design note: risk classification is deliberately split in two. The
+// deterministic policy engine (portfolio-tools.ts) runs in plain code here and
+// its classifications are source-of-truth — defensible and repeatable. The
+// Risk Review Agent is then invoked with toolChoice 'none', a single step, a
+// short timeout, and a deterministic fallback, so the LLM only adds bounded
+// judgment (priority order, reviewer guidance) and can never change a
+// classification. The policy tools registered on the agent itself exist for
+// interactive use in Mastra Studio, not for this orchestrated path.
 const riskReviewStep = createStep({
   id: 'risk-review',
   description:
-    'Risk Review Agent maps discovered rows into policy-ready agreements and creates a deterministic renewal risk brief.',
+    'Maps discovered rows into policy-ready agreements, creates the deterministic renewal risk brief, then asks the Risk Review Agent for bounded judgment.',
   inputSchema: renewalDiscoveryResultSchema,
   outputSchema: renewalReviewWorkflowResultSchema,
   execute: async ({ inputData, runId, mastra, writer }) => {
@@ -249,6 +263,10 @@ const describeToolArgs = (args: unknown): string | null => {
   return typeof reviewStatus === 'string' ? `Review status ${reviewStatus}` : null;
 };
 
+// Guardrails for the judgment pass: one generation step, no tools, temperature
+// 0, a hard output-token cap, and an AbortController timeout. If any of that
+// fails, the caller falls back to createRiskReviewJudgment so the demo never
+// stalls on the LLM.
 const generateRiskReviewAgentJudgment = async ({
   riskReviewAgent,
   riskBrief,
@@ -553,9 +571,7 @@ const buildFixtureDiscoveryResult = async ({
   asOfDate: string;
   reviewWindowDays: number;
 }): Promise<RenewalDiscoveryResult> => {
-  const fixture = fixtureSchema.parse(
-    JSON.parse(await readFile(FIXTURE_PATH, 'utf8')),
-  );
+  const fixture = fixtureSchema.parse(fixtureJson);
   const rows = fixture.examples
     .map(example => mapFixtureAgreementToRow(example.agreement, asOfDate))
     .filter(row => isRowInReviewWindow(row, asOfDate, reviewWindowDays));

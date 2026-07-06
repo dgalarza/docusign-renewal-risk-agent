@@ -11,6 +11,12 @@ const DEFAULT_WORKFLOW_NAME = 'Renewal Risk Follow-Up';
 const GET_TRIGGER_REQUIREMENTS_TOOL = 'docusign_getWorkflowTriggerRequirements';
 const TRIGGER_WORKFLOW_TOOL = 'docusign_triggerWorkflow';
 
+// The post-approval Workflow Builder handoff is a two-phase MCP call:
+// docusign_getWorkflowTriggerRequirements first (confirms the workflow exists
+// and reports the trigger inputs it expects), then docusign_triggerWorkflow
+// with the actual payload. This runs outside any agent — the human decision,
+// not an LLM, is what fires Docusign actions — so the MCP tools are executed
+// directly from the tool map instead of through Agent.generate().
 export const createWorkflowBuilderHandoff = async ({
   row,
   finding,
@@ -163,9 +169,7 @@ const buildWorkflowTriggerPayload = ({
   followUpPlan: FollowUpPlan;
 }) => {
   const reviewerEmail =
-    process.env.DOCUSIGN_WORKFLOW_REVIEWER_EMAIL ??
-    process.env.DOCUSIGN_WORKFLOW_BUILDER_EMAIL ??
-    decision.reviewer;
+    process.env.DOCUSIGN_WORKFLOW_REVIEWER_EMAIL ?? decision.reviewer;
   const preparerEmail =
     process.env.DOCUSIGN_WORKFLOW_PREPARER_EMAIL ?? reviewerEmail;
 
@@ -185,6 +189,9 @@ const buildWorkflowTriggerPayload = ({
   };
 };
 
+// MCP tool results arrive as content blocks ({ content: [{ type: 'text',
+// text: '...' }] }) where the text is usually JSON — unwrap and parse it, or
+// return null so callers can fall back to the raw response.
 const parseMcpTextPayload = (value: unknown): unknown | null => {
   if (!value || typeof value !== 'object') {
     return null;
@@ -246,6 +253,9 @@ const executeMcpTool = async (
   return executable.execute(input, undefined);
 };
 
+// The triggerWorkflow response shape is not stable across MCP server versions
+// (snake_case vs camelCase, nested under `result` or `instance`), so probe the
+// known variants rather than trusting one path.
 const readStringPath = (value: unknown, paths: string[]) => {
   for (const path of paths) {
     const resolved = path.split('.').reduce<unknown>((current, segment) => {

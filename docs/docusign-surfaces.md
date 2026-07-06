@@ -18,4 +18,4 @@ Agreement Manager API is the deterministic application integration surface for a
 
 ## Workflow Builder
 
-Workflow Builder runs follow-up only after human approval. Example follow-up actions include renewal review, legal review, cancellation notice, amendment workflow, or owner assignment.
+Workflow Builder runs follow-up only after human approval. The demo's follow-up actions (`followUpActionSchema` in `src/mastra/domain/schemas.ts`) are owner review, legal review, renegotiation, cancellation-notice preparation, and missed-deadline escalation; `no_action` and rejected decisions skip Workflow Builder.

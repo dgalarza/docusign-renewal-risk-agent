@@ -2,31 +2,47 @@
 
 import {
   AlertCircle,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
-  FileSearch,
   Loader2,
   Search,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RenewalAgreementTableRow,
   RenewalDecisionResult,
   RenewalReviewWorkflowResult,
-  RenewalRiskAgentGuidance,
   RenewalRiskFinding,
-  FollowUpAction,
 } from '@/mastra/domain/schemas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LedgerEntry } from '@/components/run-ledger';
 import { PipelineOverview, type PipelinePhase } from '@/components/pipeline-overview';
-import { cn, withDocusignUtmParams } from '@/lib/utils';
+import {
+  RenewalDetailPanel,
+  type DecisionSubmitInput,
+} from '@/components/renewal-detail-panel';
+import { RiskReviewPanel } from '@/components/risk-review-panel';
+import {
+  DataValue,
+  formatActionLabel,
+  MoneyValue,
+  NotReviewed,
+  RiskClassification,
+  workflowBuilderStatusLabel,
+} from '@/components/renewal-values';
+import { cn } from '@/lib/utils';
 
 type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
+
+/**
+ * The workflow's two discovery sources: `docusign_mcp` runs the Intake Agent
+ * against live Docusign MCP; `fixture` loads the bundled sample portfolio so
+ * the full UI — including risk review, human approval, and the Workflow
+ * Builder handoff states — works with no Docusign credentials.
+ */
+type DiscoverySource = 'docusign_mcp' | 'fixture';
 
 const DEFAULT_REVIEW_WINDOW_DAYS = 90;
 
@@ -59,22 +75,9 @@ const statusLabels: Record<UiStatus, string> = {
   error: 'Error',
 };
 
-const FOLLOW_UP_ACTIONS = [
-  'no_action',
-  'owner_review',
-  'legal_review',
-  'renegotiate',
-  'prepare_cancellation_notice',
-  'escalate_missed_deadline',
-] as const satisfies FollowUpAction[];
-
-const followUpActionLabels: Record<FollowUpAction, string> = {
-  no_action: 'No action',
-  owner_review: 'Owner review',
-  legal_review: 'Legal review',
-  renegotiate: 'Renegotiate',
-  prepare_cancellation_notice: 'Prepare cancellation',
-  escalate_missed_deadline: 'Escalate missed deadline',
+const sourceDisplayLabels: Record<DiscoverySource, string> = {
+  docusign_mcp: 'Docusign MCP',
+  fixture: 'Demo fixture',
 };
 
 export default function RenewalDiscoveryPage() {
@@ -87,6 +90,9 @@ export default function RenewalDiscoveryPage() {
   }, []);
   const [asOfDate, setAsOfDate] = useState(
     initialParams.get('asOfDate') ?? new Date().toISOString().slice(0, 10),
+  );
+  const [source, setSource] = useState<DiscoverySource>(
+    initialParams.get('source') === 'fixture' ? 'fixture' : 'docusign_mcp',
   );
   const [result, setResult] = useState<RenewalReviewWorkflowResult | null>(null);
   const [status, setStatus] = useState<UiStatus>('idle');
@@ -103,6 +109,13 @@ export default function RenewalDiscoveryPage() {
   const rows = result?.rows ?? [];
   const isLoading = status === 'loading';
   const activeStage = deriveActiveStage(entries);
+
+  const resetRun = () => {
+    setResult(null);
+    setStatus('idle');
+    setEntries([]);
+    setSelectedAgreementId(null);
+  };
 
   const pushEntry = (kind: string, label: string, detail: string | null = null) => {
     entryIdRef.current += 1;
@@ -130,19 +143,20 @@ export default function RenewalDiscoveryPage() {
     const query = new URLSearchParams({
       asOfDate,
       reviewWindowDays: String(DEFAULT_REVIEW_WINDOW_DAYS),
+      source,
     });
     window.history.replaceState({}, '', `/?${query.toString()}`);
 
-    const source = new EventSource(`/api/renewals/stream?${query.toString()}`);
-    eventSourceRef.current = source;
+    const eventSource = new EventSource(`/api/renewals/stream?${query.toString()}`);
+    eventSourceRef.current = eventSource;
     let settled = false;
 
     const settle = () => {
       settled = true;
-      source.close();
+      eventSource.close();
     };
 
-    source.addEventListener('progress', event => {
+    eventSource.addEventListener('progress', event => {
       const data = JSON.parse((event as MessageEvent<string>).data) as {
         kind: string;
         label: string;
@@ -152,7 +166,7 @@ export default function RenewalDiscoveryPage() {
       pushEntry(data.kind, data.label, data.detail);
     });
 
-    source.addEventListener('result', event => {
+    eventSource.addEventListener('result', event => {
       const payload = JSON.parse(
         (event as MessageEvent<string>).data,
       ) as RenewalReviewWorkflowResult;
@@ -167,7 +181,7 @@ export default function RenewalDiscoveryPage() {
       settle();
     });
 
-    source.addEventListener('failure', event => {
+    eventSource.addEventListener('failure', event => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as {
         message: string;
       };
@@ -176,7 +190,7 @@ export default function RenewalDiscoveryPage() {
       settle();
     });
 
-    source.onerror = () => {
+    eventSource.onerror = () => {
       if (!settled) {
         applyFailure('The progress stream disconnected before the run finished.');
         settle();
@@ -186,7 +200,7 @@ export default function RenewalDiscoveryPage() {
     function applyFailure(message: string) {
       setResult({
         status: 'error',
-        sourceLabel: 'Docusign MCP',
+        sourceLabel: sourceDisplayLabels[source],
         asOfDate,
         reviewWindowDays: DEFAULT_REVIEW_WINDOW_DAYS,
         message: 'Renewal discovery request failed.',
@@ -202,13 +216,7 @@ export default function RenewalDiscoveryPage() {
     }
   }
 
-  async function submitDecision(input: {
-    row: RenewalAgreementTableRow;
-    finding: RenewalRiskFinding;
-    decision: 'approved' | 'edited' | 'rejected';
-    selectedAction: FollowUpAction;
-    notes: string;
-  }) {
+  async function submitDecision(input: DecisionSubmitInput) {
     setDecisionLoadingId(input.row.agreementId);
     setDecisionError(null);
 
@@ -276,6 +284,21 @@ export default function RenewalDiscoveryPage() {
 
             <div className="mt-8 rounded-2xl border bg-card px-5 py-5">
               <label className="grid gap-2 text-sm font-semibold text-muted-foreground">
+                Source
+                <select
+                  className="h-12 rounded-xl border border-border bg-card px-4 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={source}
+                  onChange={event => {
+                    setSource(event.target.value as DiscoverySource);
+                    resetRun();
+                  }}
+                >
+                  <option value="docusign_mcp">Docusign MCP</option>
+                  <option value="fixture">Demo fixture</option>
+                </select>
+              </label>
+
+              <label className="mt-4 grid gap-2 text-sm font-semibold text-muted-foreground">
                 As of date
                 <Input
                   className="h-12 rounded-xl border-border bg-card px-4 font-data text-base text-foreground"
@@ -283,10 +306,7 @@ export default function RenewalDiscoveryPage() {
                   value={asOfDate}
                   onChange={event => {
                     setAsOfDate(event.target.value);
-                    setResult(null);
-                    setStatus('idle');
-                    setEntries([]);
-                    setSelectedAgreementId(null);
+                    resetRun();
                   }}
                 />
               </label>
@@ -301,6 +321,7 @@ export default function RenewalDiscoveryPage() {
               </Button>
               <p className="mt-5 text-center font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
                 Review window · {DEFAULT_REVIEW_WINDOW_DAYS} days
+                {source === 'fixture' ? ' · no Docusign credentials needed' : ''}
               </p>
             </div>
           </div>
@@ -328,7 +349,7 @@ export default function RenewalDiscoveryPage() {
             ) : null}
 
             {status !== 'idle' && status !== 'loading' ? (
-              <ResultBar result={result} status={status} />
+              <ResultBar result={result} status={status} source={source} />
             ) : null}
 
             {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
@@ -360,6 +381,7 @@ export default function RenewalDiscoveryPage() {
             ) : status !== 'idle' && status !== 'loading' ? (
               <EmptyState
                 status={status}
+                source={source}
                 isLoading={isLoading}
                 onRun={discoverRenewals}
               />
@@ -389,10 +411,12 @@ function emptyStateMessage(status: UiStatus) {
 
 function EmptyState({
   status,
+  source,
   isLoading,
   onRun,
 }: {
   status: UiStatus;
+  source: DiscoverySource;
   isLoading: boolean;
   onRun: () => void;
 }) {
@@ -400,7 +424,7 @@ function EmptyState({
     <section className="overflow-hidden rounded-2xl border bg-secondary/60">
       <div className="border-b bg-card px-6 py-4">
         <span className="font-data text-xs uppercase tracking-[0.08em] text-muted-foreground">
-          Docusign MCP · {status === 'idle' ? 'No run recorded yet for this date' : statusLabels[status]}
+          {sourceDisplayLabels[source]} · {status === 'idle' ? 'No run recorded yet for this date' : statusLabels[status]}
         </span>
       </div>
       <div className="flex min-h-72 flex-col items-center justify-center gap-5 px-8 py-14 text-center">
@@ -458,14 +482,18 @@ function toPipelinePhase(status: UiStatus): PipelinePhase {
 function ResultBar({
   result,
   status,
+  source,
 }: {
   result: RenewalReviewWorkflowResult | null;
   status: UiStatus;
+  source: DiscoverySource;
 }) {
-  const sourceLabel = result?.sourceLabel ?? 'Docusign MCP';
+  const sourceLabel = result?.sourceLabel ?? sourceDisplayLabels[source];
   const message =
     status === 'loading'
-      ? 'The Intake Agent is querying Agreement Manager through Docusign MCP.'
+      ? source === 'fixture'
+        ? 'The workflow is loading the bundled sample portfolio.'
+        : 'The Intake Agent is querying Agreement Manager through Docusign MCP.'
       : status === 'idle'
         ? 'No run recorded yet for this date.'
         : status === 'error'
@@ -585,187 +613,6 @@ function StatTile({
   );
 }
 
-function RiskReviewPanel({
-  rows,
-  riskBrief,
-  riskReview,
-}: {
-  rows: RenewalAgreementTableRow[];
-  riskBrief: RenewalReviewWorkflowResult['riskBrief'];
-  riskReview: NonNullable<RenewalReviewWorkflowResult['riskReview']>;
-}) {
-  const supplierByAgreementId = new Map(rows.map(row => [row.agreementId, row.supplier]));
-  const rowByAgreementId = new Map(rows.map(row => [row.agreementId, row]));
-  const findingByAgreementId = new Map(
-    riskBrief?.findings.map(finding => [finding.agreementId, finding]) ?? [],
-  );
-  const guidanceByAgreementId = new Map(
-    riskReview.reviewerGuidance.map(guidance => [guidance.agreementId, guidance]),
-  );
-  const priorityGuidance = riskReview.priorityAgreementIds
-    .map(agreementId => guidanceByAgreementId.get(agreementId))
-    .filter(guidance => guidance !== undefined);
-  const displayedGuidance =
-    priorityGuidance.length > 0 ? priorityGuidance.slice(0, 3) : riskReview.reviewerGuidance.slice(0, 3);
-
-  return (
-    <section className="rounded-2xl border bg-card px-6 py-6">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(22rem,1fr)]">
-        <div className="flex flex-col justify-between gap-5">
-          <div>
-            <p className="font-data text-xs font-semibold uppercase tracking-[0.12em] text-primary">
-              Review summary
-            </p>
-            <h2 className="mt-3 text-lg font-semibold leading-7 text-foreground">
-              {riskReview.portfolioJudgment}
-            </h2>
-          </div>
-          {displayedGuidance.length > 0 ? (
-            <ul className="grid gap-2 text-sm leading-6 text-foreground">
-              {displayedGuidance.map(guidance => {
-                const row = rowByAgreementId.get(guidance.agreementId);
-                const finding = findingByAgreementId.get(guidance.agreementId);
-
-                return (
-                  <li key={guidance.agreementId}>
-                    {formatPriorityActionSummary({ guidance, finding, row })}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-        <div className="border-t pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-          <p className="font-data text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Recommended next actions
-          </p>
-          <div className="mt-4 grid gap-3">
-            {displayedGuidance.map(guidance => {
-              const finding = findingByAgreementId.get(guidance.agreementId);
-
-              return (
-                <div key={guidance.agreementId} className="rounded-xl border bg-card px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">
-                      {supplierByAgreementId.get(guidance.agreementId) ?? guidance.agreementId}
-                    </span>
-                    {finding ? <RiskClassification finding={finding} /> : null}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {guidance.reasonForPriority || guidance.judgment}
-                  </p>
-                  <p className="mt-2 font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
-                    {formatSuggestedReviewer(guidance.suggestedReviewer)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function formatSuggestedReviewer(
-  reviewer: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number]['suggestedReviewer'],
-) {
-  const labels: Record<typeof reviewer, string> = {
-    procurement_owner: 'Procurement owner',
-    legal: 'Legal',
-    executive_escalation: 'Executive escalation',
-    none: 'No reviewer',
-  };
-
-  return labels[reviewer];
-}
-
-function formatPriorityActionSummary({
-  guidance,
-  finding,
-  row,
-}: {
-  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
-  finding: RenewalRiskFinding | undefined;
-  row: RenewalAgreementTableRow | undefined;
-}) {
-  const supplier = row?.supplier ?? finding?.supplierName ?? guidance.agreementId;
-  const reason = formatPriorityReason({ guidance, finding, row });
-  const action = formatPriorityAction(finding?.recommendedAction);
-
-  return `${supplier} — ${reason} → ${action}`;
-}
-
-function formatPriorityReason({
-  guidance,
-  finding,
-  row,
-}: {
-  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
-  finding: RenewalRiskFinding | undefined;
-  row: RenewalAgreementTableRow | undefined;
-}) {
-  const parts: string[] = [];
-  const daysUntilNotice = finding?.daysUntilNoticeDeadline ?? row?.daysUntilNoticeDeadline;
-
-  if (typeof daysUntilNotice === 'number') {
-    parts.push(formatNoticeTiming(daysUntilNotice));
-  }
-
-  if (typeof row?.agreementValue === 'number') {
-    parts.push(formatCompactMoney(row.agreementValue, row.currency));
-  }
-
-  if (row?.renewalType === 'auto_renews') {
-    parts.push('auto-renew');
-  }
-
-  if (row?.source.missingFields.length) {
-    parts.push('missing fields');
-  }
-
-  return parts.length > 0 ? parts.join(', ') : guidance.reasonForPriority || guidance.judgment;
-}
-
-function formatNoticeTiming(daysUntilNotice: number) {
-  const absoluteDays = Math.abs(daysUntilNotice);
-  const unit = absoluteDays === 1 ? 'day' : 'days';
-
-  if (daysUntilNotice < 0) {
-    return `${absoluteDays} ${unit} overdue`;
-  }
-
-  if (daysUntilNotice === 0) {
-    return 'due today';
-  }
-
-  return `${daysUntilNotice} ${unit} to notice`;
-}
-
-function formatCompactMoney(value: number, currency: string) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  })
-    .format(value)
-    .replace('K', 'k');
-}
-
-function formatPriorityAction(action: FollowUpAction | undefined) {
-  const labels: Record<FollowUpAction, string> = {
-    no_action: 'no action',
-    owner_review: 'owner review',
-    legal_review: 'send to legal',
-    renegotiate: 'renegotiate',
-    prepare_cancellation_notice: 'prepare cancellation',
-    escalate_missed_deadline: 'escalate now',
-  };
-
-  return action ? labels[action] : 'review';
-}
-
 function AgreementList({
   rows,
   riskBrief,
@@ -785,13 +632,7 @@ function AgreementList({
   decisionError: string | null;
   decisionLoadingId: string | null;
   onSelect: (agreementId: string) => void;
-  onSubmitDecision: (input: {
-    row: RenewalAgreementTableRow;
-    finding: RenewalRiskFinding;
-    decision: 'approved' | 'edited' | 'rejected';
-    selectedAction: FollowUpAction;
-    notes: string;
-  }) => Promise<void>;
+  onSubmitDecision: (input: DecisionSubmitInput) => Promise<void>;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border bg-card">
@@ -906,452 +747,10 @@ function AgreementSummaryRow({
   );
 }
 
-function RenewalDetailPanel({
-  row,
-  finding,
-  guidance,
-  decisionResult,
-  decisionError,
-  decisionPending,
-  onSubmitDecision,
-}: {
-  row: RenewalAgreementTableRow | null;
-  finding: RenewalRiskFinding | null;
-  guidance: RenewalRiskAgentGuidance | null;
-  decisionResult: RenewalDecisionResult | null;
-  decisionError: string | null;
-  decisionPending: boolean;
-  onSubmitDecision: (input: {
-    row: RenewalAgreementTableRow;
-    finding: RenewalRiskFinding;
-    decision: 'approved' | 'edited' | 'rejected';
-    selectedAction: FollowUpAction;
-    notes: string;
-  }) => Promise<void>;
-}) {
-  const [selectedAction, setSelectedAction] = useState<FollowUpAction>('owner_review');
-  const [notes, setNotes] = useState('');
-
-  useEffect(() => {
-    setSelectedAction(finding?.recommendedAction ?? 'owner_review');
-    setNotes('');
-  }, [row?.agreementId, finding?.recommendedAction]);
-
-  if (!row) {
-    return (
-      <aside className="hidden rounded-lg border border-dashed bg-card xl:block">
-        <div className="flex min-h-56 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-          <FileSearch className="size-6 text-muted-foreground" aria-hidden />
-          <p className="text-sm font-medium text-foreground">Select an agreement</p>
-          <p className="max-w-56 text-xs leading-5 text-muted-foreground">
-            Pick a row to see the full renewal-risk picture — dates, policy rationale, and the
-            extracted signals behind it.
-          </p>
-        </div>
-      </aside>
-    );
-  }
-
-  return (
-    <div
-      className="bg-secondary/55 px-5 py-5"
-      aria-label={`Renewal-risk detail for ${row.supplier}`}
-    >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
-        <div className="flex h-full flex-col gap-5">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailFact label="Renewal date">
-              <DataValue value={row.renewalDate} />
-            </DetailFact>
-            <DetailFact label="Notice deadline">
-              <DataValue value={row.noticeDeadline} />
-            </DetailFact>
-            <DetailFact label="Renewal type">
-              <RenewalTypeLabel value={row.renewalType} />
-            </DetailFact>
-            <DetailFact label="Notice period">
-              <NoticePeriodValue noticePeriodDays={row.noticePeriodDays} />
-            </DetailFact>
-            <DetailFact label="Days to notice">
-              <DaysToNotice days={row.daysUntilNoticeDeadline} />
-            </DetailFact>
-            <DetailFact label="Contract value">
-              <MoneyValue value={row.agreementValue} currency={row.currency} />
-            </DetailFact>
-          </dl>
-
-          {guidance || finding || row.source.recordUrl ? (
-            <div className="flex flex-1 flex-col rounded-xl border bg-card px-4 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <p className="font-data text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">
-                  Risk Review Agent
-                </p>
-              </div>
-
-              {guidance ? (
-                <>
-                  <p className="mt-4 text-sm leading-6 text-foreground">
-                    {guidance.judgment}
-                  </p>
-                  {guidance.reasonForPriority ? (
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      {guidance.reasonForPriority}
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
-
-              {row.source.recordUrl ? (
-                <div className="mt-auto border-t pt-4">
-                  <p className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
-                    Source record
-                  </p>
-                  <a
-                    href={withDocusignUtmParams(row.source.recordUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
-                  >
-                    Open in Docusign
-                    <ExternalLink className="size-3" aria-hidden />
-                  </a>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-5">
-          <DecisionPanel
-            row={row}
-            finding={finding}
-            selectedAction={selectedAction}
-            setSelectedAction={setSelectedAction}
-            notes={notes}
-            setNotes={setNotes}
-            decisionResult={decisionResult}
-            decisionError={decisionError}
-            decisionPending={decisionPending}
-            onSubmitDecision={onSubmitDecision}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DecisionPanel({
-  row,
-  finding,
-  selectedAction,
-  setSelectedAction,
-  notes,
-  setNotes,
-  decisionResult,
-  decisionError,
-  decisionPending,
-  onSubmitDecision,
-}: {
-  row: RenewalAgreementTableRow;
-  finding: RenewalRiskFinding | null;
-  selectedAction: FollowUpAction;
-  setSelectedAction: (action: FollowUpAction) => void;
-  notes: string;
-  setNotes: (notes: string) => void;
-  decisionResult: RenewalDecisionResult | null;
-  decisionError: string | null;
-  decisionPending: boolean;
-  onSubmitDecision: (input: {
-    row: RenewalAgreementTableRow;
-    finding: RenewalRiskFinding;
-    decision: 'approved' | 'edited' | 'rejected';
-    selectedAction: FollowUpAction;
-    notes: string;
-  }) => Promise<void>;
-}) {
-  if (!finding) {
-    return null;
-  }
-
-  const submit = (
-    decision: 'approved' | 'edited' | 'rejected',
-    action: FollowUpAction,
-  ) =>
-    onSubmitDecision({
-      row,
-      finding,
-      decision,
-      selectedAction: action,
-      notes,
-    });
-
-  return (
-    <div className="rounded-xl border bg-card px-4 py-4">
-      <p className="font-data text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">
-        Human approval
-      </p>
-      <p className="mt-2 text-sm leading-6 text-foreground">
-        Approve the policy recommendation or override it before Workflow Builder acts.
-      </p>
-
-      <label className="mt-3 grid gap-1.5 text-sm font-medium text-muted-foreground">
-        Override action
-        <select
-          className="h-10 rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          value={selectedAction}
-          onChange={event => setSelectedAction(event.target.value as FollowUpAction)}
-        >
-          {FOLLOW_UP_ACTIONS.map(action => (
-            <option key={action} value={action}>
-              {formatActionLabel(action)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="mt-3 grid gap-1.5 text-sm font-medium text-muted-foreground">
-        Reviewer notes
-        <textarea
-          className="min-h-24 resize-none rounded-lg border border-input bg-card px-3 py-2 text-sm leading-5 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          value={notes}
-          onChange={event => setNotes(event.target.value)}
-          placeholder="Add context for the request"
-        />
-      </label>
-
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <Button
-          className="w-fit px-0 text-urgent hover:bg-transparent hover:text-urgent"
-          disabled={decisionPending}
-          onClick={() => submit('rejected', 'no_action')}
-          size="sm"
-          variant="ghost"
-        >
-          Reject
-        </Button>
-        <Button
-          className="rounded-lg"
-          disabled={decisionPending}
-          onClick={() =>
-            submit(
-              selectedAction === finding.recommendedAction ? 'approved' : 'edited',
-              selectedAction,
-            )
-          }
-          size="sm"
-        >
-          {decisionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-          Submit
-        </Button>
-      </div>
-
-      {decisionError ? (
-        <p className="mt-3 rounded-md border border-urgent/30 bg-urgent-wash px-3 py-2 text-xs leading-5 text-urgent">
-          {decisionError}
-        </p>
-      ) : null}
-
-      {decisionResult ? <DecisionResultCard result={decisionResult} /> : null}
-    </div>
-  );
-}
-
-function DecisionResultCard({ result }: { result: RenewalDecisionResult }) {
-  return (
-    <div className="mt-4 rounded-xl border bg-secondary px-3 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">
-          {formatActionLabel(result.followUpPlan.action)}
-        </p>
-        <span className="rounded-full border border-border bg-card px-2 py-0.5 font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground">
-          {result.followUpPlan.status}
-        </span>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        {result.followUpPlan.details}
-      </p>
-      <div className="mt-3 border-t pt-3">
-        <p className="font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-          Workflow Builder
-        </p>
-        <p className="mt-1 text-xs leading-5 text-foreground">
-          {workflowBuilderStatusLabel(result.workflowBuilder.status)}
-        </p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {result.workflowBuilder.details}
-        </p>
-        {result.workflowBuilder.instanceUrl ? (
-          <a
-            href={result.workflowBuilder.instanceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-foreground underline-offset-2 hover:underline"
-          >
-            Open workflow instance
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function DetailFact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="text-sm leading-6 text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="m-0 text-sm leading-6 text-foreground">{children}</dd>
-    </div>
-  );
-}
-
 function formatToolName(toolName: string) {
   if (toolName === 'docusign_getAllAgreements') {
     return 'Agreement discovery';
   }
 
   return toolName;
-}
-
-function NotReviewed() {
-  return (
-    <span
-      className="inline-flex items-center rounded-full border bg-accent px-2.5 py-1 text-xs font-medium text-muted-foreground"
-      style={{ borderColor: 'var(--muted-foreground)' }}
-    >
-      Not reviewed
-    </span>
-  );
-}
-
-function RiskClassification({ finding }: { finding: RenewalRiskFinding }) {
-  const labels: Record<RenewalRiskFinding['classification'], string> = {
-    standard: 'Standard',
-    needs_review: 'Needs review',
-    urgent: 'Urgent',
-    blocked: 'Blocked',
-  };
-  const borderColors: Record<RenewalRiskFinding['classification'], string> = {
-    standard: 'var(--live)',
-    needs_review: 'var(--caution)',
-    urgent: 'var(--urgent)',
-    blocked: 'var(--urgent)',
-  };
-
-  return (
-    <span
-      className={cn(
-        'inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium',
-        finding.classification === 'standard' && 'bg-live-wash text-live',
-        finding.classification === 'needs_review' && 'bg-caution-wash text-caution',
-        finding.classification === 'urgent' && 'bg-urgent-wash text-urgent',
-        finding.classification === 'blocked' && 'bg-urgent-wash text-urgent',
-      )}
-      style={{ borderColor: borderColors[finding.classification] }}
-      title={finding.rationale}
-    >
-      {labels[finding.classification]}
-    </span>
-  );
-}
-
-function formatActionLabel(action: FollowUpAction) {
-  return followUpActionLabels[action];
-}
-
-function workflowBuilderStatusLabel(
-  status: RenewalDecisionResult['workflowBuilder']['status'],
-) {
-  const labels: Record<typeof status, string> = {
-    not_configured: 'Workflow Builder not configured',
-    triggered: 'Workflow Builder started',
-    failed: 'Workflow Builder failed',
-    skipped: 'Workflow Builder skipped',
-  };
-
-  return labels[status];
-}
-
-function DataValue({ value }: { value: string | null }) {
-  if (!value) {
-    return <NotExtracted />;
-  }
-
-  return <span className="whitespace-nowrap tabular-nums">{value}</span>;
-}
-
-function MoneyValue({ value, currency }: { value: number | null; currency: string }) {
-  if (typeof value !== 'number') {
-    return <NotExtracted />;
-  }
-
-  return (
-    <span className="whitespace-nowrap tabular-nums">
-      {new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currency || 'USD',
-        maximumFractionDigits: 0,
-      }).format(value)}
-    </span>
-  );
-}
-
-function NoticePeriodValue({ noticePeriodDays }: { noticePeriodDays: number | null }) {
-  if (noticePeriodDays === null) {
-    return <NotExtracted />;
-  }
-
-  return (
-    <span className="whitespace-nowrap tabular-nums">
-      {noticePeriodDays} days
-    </span>
-  );
-}
-
-function DaysToNotice({ days }: { days: number | null }) {
-  if (typeof days !== 'number') {
-    return <NotExtracted />;
-  }
-
-  return (
-    <span
-      className={cn(
-        'whitespace-nowrap tabular-nums',
-        days <= 14 && 'text-urgent',
-        days > 14 && days <= 30 && 'text-caution',
-      )}
-    >
-      {formatDayCount(days)}
-    </span>
-  );
-}
-
-function RenewalTypeLabel({ value }: { value: RenewalAgreementTableRow['renewalType'] }) {
-  const labels: Record<RenewalAgreementTableRow['renewalType'], string> = {
-    auto_renews: 'Auto-renews',
-    manual_renewal: 'Manual renewal',
-    evergreen: 'Evergreen',
-    none: 'None',
-    not_extracted: 'Not extracted',
-  };
-
-  if (value === 'not_extracted') {
-    return <NotExtracted />;
-  }
-
-  return <span className="whitespace-nowrap">{labels[value]}</span>;
-}
-
-function NotExtracted() {
-  return <span>Not extracted</span>;
-}
-
-function formatDayCount(days: number) {
-  if (days < 0) {
-    return `${Math.abs(days)} ${Math.abs(days) === 1 ? 'day' : 'days'} overdue`;
-  }
-
-  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
