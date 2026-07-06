@@ -87,13 +87,39 @@ export const createWorkflowBuilderHandoff = async ({
     const triggerResponse = await executeMcpTool(triggerWorkflowTool, {
       accountId,
       workflowId,
-      instanceName: triggerPayload.instance_name,
       instance_name: triggerPayload.instance_name,
-      triggerInputs: triggerPayload.trigger_inputs,
       trigger_inputs: triggerPayload.trigger_inputs,
     });
     const parsedTriggerResponse =
       parseMcpTextPayload(triggerResponse) ?? triggerResponse;
+    const triggerError = readMcpError(parsedTriggerResponse) ?? readMcpError(triggerResponse);
+    const instanceId = readStringPath(parsedTriggerResponse, [
+      'instance_id',
+      'instanceId',
+      'instance.id',
+      'result.instance_id',
+      'result.instanceId',
+      'result.id',
+    ]);
+    const instanceUrl = readStringPath(parsedTriggerResponse, [
+      'instance_url',
+      'instanceUrl',
+      'workflow_instance_url',
+      'workflowInstanceUrl',
+      'instance.url',
+      'result.instance_url',
+      'result.instanceUrl',
+      'result.workflow_instance_url',
+      'result.workflowInstanceUrl',
+    ]);
+
+    if (triggerError) {
+      throw new Error(triggerError);
+    }
+
+    if (!instanceId && !instanceUrl) {
+      throw new Error('Docusign MCP triggerWorkflow did not return a workflow instance ID or URL.');
+    }
 
     return {
       workflowId,
@@ -103,16 +129,8 @@ export const createWorkflowBuilderHandoff = async ({
       details: 'Docusign Workflow Builder follow-up was started through MCP.',
       triggerPayload,
       requirements,
-      instanceId: readStringPath(parsedTriggerResponse, [
-        'instance_id',
-        'instanceId',
-        'instance.id',
-      ]),
-      instanceUrl: readStringPath(parsedTriggerResponse, [
-        'instance_url',
-        'instanceUrl',
-        'instance.url',
-      ]),
+      instanceId,
+      instanceUrl,
       errors: [],
     };
   } catch (error) {
@@ -195,6 +213,22 @@ const parseMcpTextPayload = (value: unknown): unknown | null => {
   } catch {
     return null;
   }
+};
+
+const readMcpError = (value: unknown): string | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (record.error === true || record.isError === true) {
+    return typeof record.message === 'string'
+      ? record.message
+      : 'Docusign MCP returned an error.';
+  }
+
+  return null;
 };
 
 const executeMcpTool = async (
