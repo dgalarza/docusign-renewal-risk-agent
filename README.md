@@ -28,17 +28,40 @@ The project starts from completed supplier agreements, not draft agreement intak
 | IAM Toolkit | Defines, tests, and promotes custom extraction fields. |
 | MCP | Gives external agents access to Docusign agreement data and supported actions. |
 | Agreement Manager API | Deterministic API access to agreement records and extracted fields. |
-| Workflow Builder | Runs renewal-review, legal-review, cancellation, or amendment follow-up after human approval. |
+| Workflow Builder | Runs the approved follow-up after human review: owner review, legal review, renegotiation, cancellation notice, or missed-deadline escalation. |
 | Mastra | Custom agent and workflow layer for the demo. |
 
 ## Repository Layout
 
 ```text
-docs/       Concept, architecture, and Docusign surface notes.
-examples/   Sample completed supplier agreement portfolio.
-src/app/    Lightweight Next.js preview app and API route.
-src/mastra/ Domain schemas, agents, tools, and workflows.
+docs/         Concept, architecture, and Docusign surface notes.
+examples/     Sample completed supplier agreement portfolio and fixture.
+scripts/      Docusign OAuth helper, MCP inspector/runner, agreement PDF builder.
+docusign-iam/ IAM Toolkit project that provisions the Agreement Manager custom
+              agreement type and extraction fields in the sandbox — see
+              docusign-iam/renewal-risk/README.md.
+src/app/      Next.js preview app and API routes (discovery, stream, decisions).
+src/mastra/   Domain schemas, agents, tools, MCP client, and workflows.
 ```
+
+## Reading Path
+
+To learn the codebase, read in this order:
+
+1. `docs/concept.md` — the problem and the risk policy.
+2. `docs/architecture.md` — the workflow shape and agent roles.
+3. `docs/docusign-surfaces.md` — how each Docusign surface fits.
+4. `src/mastra/domain/schemas.ts` — the single data contract everything shares.
+5. `src/mastra/mcp/docusign-mcp-client.ts` and `src/mastra/agents/intake-agent.ts`
+   — how Docusign MCP tools reach a Mastra agent.
+6. `src/mastra/tools/portfolio-tools.ts` — the deterministic policy engine.
+7. `src/mastra/workflows/renewal-discovery-workflow.ts` — orchestration, the
+   policy/judgment split, and the streaming bridge.
+8. `src/app/api/renewals/decisions/route.ts` and
+   `src/mastra/tools/workflow-builder-tools.ts` — human approval and the
+   Workflow Builder handoff.
+9. `docs/agreement-manager-field-mapping.md` plus `docusign-iam/` — the
+   extraction-field contract and the IAM Toolkit project that provisions it.
 
 ## Getting Started
 
@@ -52,9 +75,15 @@ test (`npm run test:policy`). The policy test validates
 `examples/agreement-demo-fixture.json` with `asOfDate=2026-07-01` plus focused
 missing-field and row-normalization cases.
 
+The two agents run on an OpenAI model, so live discovery and the agent
+judgment layer need `OPENAI_API_KEY` in `.env`. The fixture paths below work
+without it — the deterministic policy engine needs no model, and the
+risk-review step falls back to a deterministic judgment when the agent is
+unavailable.
+
 ## Local Risk Review Fixture
 
-Run the discovery workflow against the demo fixture without Docusign MCP:
+Run the discovery flow against the demo fixture without Docusign MCP:
 
 ```shell
 npm run inspect:mcp fixture 2026-07-01 120
@@ -68,7 +97,16 @@ The command emits the same workflow result shape as the live path:
 - each finding includes `classification`, `recommendedAction`, `rationale`,
   `daysUntilNoticeDeadline`, and `extractedSignals`.
 - `riskReview`: Risk Review Agent judgment with the portfolio readout,
-  priority agreement order, and reviewer guidance.
+  priority agreement order, and reviewer guidance. The CLI fixture command
+  skips the agent and reports `riskReview: null`; fixture runs through the
+  preview UI (below) include it.
+
+The preview UI has the same credential-free path: start the servers
+(`npm run dev` and `npm run preview:app`), switch the **Source** selector to
+**Demo fixture** (or open `http://localhost:4173/?source=fixture`), and run
+discovery. The full flow — risk review, human approval, and Workflow Builder
+handoff states — works against the bundled portfolio with no Docusign
+credentials.
 
 ## Docusign MCP Renewal Discovery
 
@@ -90,7 +128,7 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
 3. Run `npm run inspect:mcp` to verify MCP tool discovery.
 4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the workflow. The
    workflow invokes the Intake Agent, which receives Docusign MCP tools through
-   Mastra `MCPClient.listTools()` and calls Agreement Manager before rows are
+   Mastra `MCPClient.listToolsWithErrors()` and calls Agreement Manager before rows are
    normalized for the preview table. The workflow then creates a deterministic
    renewal-risk policy brief and invokes the Risk Review Agent to add
    reviewer-facing judgment for the top findings without changing policy
@@ -117,6 +155,27 @@ human decision to `POST /api/renewals/decisions`, which:
 - calls `docusign_triggerWorkflow` for approved or overridden follow-up actions.
 
 Rejected decisions and `no_action` overrides skip Workflow Builder.
+
+### Workflow Builder Setup
+
+The handoff triggers one configured Workflow Builder workflow and passes the
+approved action as data. In the Docusign sandbox:
+
+1. Create a Workflow Builder workflow whose trigger declares these inputs
+   (the exact names the trigger payload sends): `startDate`,
+   `workflowBuilder`, `workflowPreparer`, `agreementId`, `supplier`,
+   `classification`, `approvedAction`, `noticeDeadline`, `reviewerNotes`.
+2. Publish the workflow — unpublished workflows cannot be triggered.
+3. Put its ID in `DOCUSIGN_WORKFLOW_ID` and the account in
+   `DOCUSIGN_ACCOUNT_ID`. `DOCUSIGN_WORKFLOW_REVIEWER_EMAIL` and
+   `DOCUSIGN_WORKFLOW_PREPARER_EMAIL` override the emails passed as
+   `workflowBuilder` / `workflowPreparer`.
+
+Handoff statuses in the decision result: `not_configured` (env vars missing),
+`triggered` (instance started; the response includes the instance ID/URL),
+`failed` (requirements or trigger call failed; see `errors`, with the built
+trigger payload included for inspection), and `skipped` (rejected or
+`no_action` decisions).
 
 ## Live Run Progress
 

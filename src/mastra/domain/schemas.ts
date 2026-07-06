@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
-export const renewalTypeSchema = z.enum(['auto_renews', 'manual_renewal', 'evergreen', 'none', 'not_extracted']);
+// These schemas are the single data contract for the demo: the Mastra
+// workflow, the Next.js routes, and the preview UI all import from here.
+// Several are also passed to Agent.generate() as structuredOutput schemas,
+// so the .describe() annotations below double as instructions the LLM sees
+// when producing each field.
+
+export const renewalTypeSchema = z
+  .enum(['auto_renews', 'manual_renewal', 'evergreen', 'none', 'not_extracted'])
+  .describe(
+    'How the agreement renews. evergreen = continues indefinitely until cancelled; not_extracted = Agreement Manager did not return a renewal provision.',
+  );
 
 export const renewalRiskClassificationSchema = z.enum(['standard', 'needs_review', 'urgent', 'blocked']);
 
@@ -17,12 +27,26 @@ export const supplierRenewalAgreementSchema = z.object({
   agreementId: z.string(),
   supplierName: z.string(),
   agreementTitle: z.string(),
-  agreementValue: z.number().nullable(),
+  agreementValue: z
+    .number()
+    .nullable()
+    .describe('Annual or renewal value as a plain number; null when not extracted.'),
   currency: z.string(),
   renewalType: renewalTypeSchema,
-  renewalDate: z.string().nullable(),
-  noticePeriodDays: z.number().nullable(),
-  noticeDeadline: z.string().nullable(),
+  renewalDate: z
+    .string()
+    .nullable()
+    .describe('ISO date (YYYY-MM-DD) of the next renewal; null when not extracted.'),
+  noticePeriodDays: z
+    .number()
+    .nullable()
+    .describe('Days of notice required to cancel or change the renewal.'),
+  noticeDeadline: z
+    .string()
+    .nullable()
+    .describe(
+      'Last ISO date to act before renewal. Derived as renewalDate minus noticePeriodDays when Agreement Manager does not extract it directly.',
+    ),
 });
 
 export const renewalAgreementSourceSchema = z.object({
@@ -31,7 +55,11 @@ export const renewalAgreementSourceSchema = z.object({
   recordId: z.string().optional(),
   recordUrl: z.string().optional(),
   rawStatus: z.string().optional(),
-  missingFields: z.array(z.string()),
+  missingFields: z
+    .array(z.string())
+    .describe(
+      'Table fields the source could not provide. Missing data is surfaced as an extraction gap, never invented — the policy engine routes rows with missing renewal terms to needs_review.',
+    ),
 });
 
 export const renewalAgreementTableRowSchema = z.object({
@@ -41,19 +69,21 @@ export const renewalAgreementTableRowSchema = z.object({
   renewalDate: z.string().nullable(),
   noticePeriodDays: z.number().nullable(),
   noticeDeadline: z.string().nullable(),
-  daysUntilNoticeDeadline: z.number().nullable(),
+  daysUntilNoticeDeadline: z
+    .number()
+    .nullable()
+    .describe('Days from asOfDate to noticeDeadline; negative when the deadline has passed.'),
   agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
   source: renewalAgreementSourceSchema,
 });
 
-export const renewalDiscoveryStatusSchema = z.enum([
-  'live',
-  'empty',
-  'missing_fields',
-  'error',
-]);
+export const renewalDiscoveryStatusSchema = z
+  .enum(['live', 'empty', 'missing_fields', 'error'])
+  .describe(
+    'live = every returned row is complete; missing_fields = rows returned but some renewal fields were not extracted; empty = no agreements matched; error = the source call failed.',
+  );
 
 export const renewalDiscoveryResultSchema = z.object({
   status: renewalDiscoveryStatusSchema,

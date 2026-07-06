@@ -11,6 +11,11 @@ import {
   createRenewalRiskBrief,
 } from '../tools/portfolio-tools';
 
+// These tools wrap the deterministic policy engine so the agent can run the
+// policy itself in interactive sessions (Mastra Studio, playground). In the
+// orchestrated renewalDiscoveryWorkflow the policy runs directly in step code
+// and the agent is invoked with toolChoice 'none' — see the design note in
+// renewal-discovery-workflow.ts.
 export const classifyRenewalRiskTool = createTool({
   id: 'classify-renewal-risk',
   description:
@@ -47,7 +52,9 @@ export const riskReviewAgent = new Agent({
 
 Your job is risk review:
 - Use completed supplier agreement facts from Agreement Manager or the demo fixture.
-- Apply the deterministic procurement policy through the provided tools.
+- The deterministic procurement policy produces the canonical classifications.
+  In the workflow you receive them in a pre-computed risk brief; in interactive
+  sessions, produce them with the provided policy tools.
 - Do not invent classifications, notice deadlines, or agreement values.
 - Treat tool-returned classifications and recommended actions as fixed source-of-truth facts.
 - Exercise judgment by prioritizing which agreements a human should review first, identifying why each one matters, and naming the likely reviewer.

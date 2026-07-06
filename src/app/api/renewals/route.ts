@@ -18,12 +18,16 @@ export async function GET(request: Request) {
   const reviewWindowDays = Number(
     requestUrl.searchParams.get('reviewWindowDays') ?? 90,
   );
+  // `source=fixture` runs the workflow against the bundled sample portfolio.
+  const source =
+    requestUrl.searchParams.get('source') === 'fixture' ? 'fixture' : 'docusign_mcp';
 
   try {
     const result = await runRenewalDiscoveryWorkflowViaMastra({
       request: RENEWAL_DISCOVERY_REQUEST,
       asOfDate,
       reviewWindowDays,
+      source,
     });
 
     return NextResponse.json(renewalReviewWorkflowResultSchema.parse(result));
@@ -33,6 +37,7 @@ export async function GET(request: Request) {
         buildMastraWorkflowErrorResult({
           asOfDate,
           reviewWindowDays,
+          source,
           error,
         }),
       ),
@@ -45,6 +50,7 @@ const runRenewalDiscoveryWorkflowViaMastra = async (input: {
   request: string;
   asOfDate?: string;
   reviewWindowDays: number;
+  source: 'docusign_mcp' | 'fixture';
 }) => {
   const response = await fetch(
     `${getMastraApiUrl()}/workflows/${RENEWAL_DISCOVERY_WORKFLOW_ID}/start-async`,
@@ -84,14 +90,16 @@ const getMastraApiUrl = () =>
 const buildMastraWorkflowErrorResult = ({
   asOfDate,
   reviewWindowDays,
+  source,
   error,
 }: {
   asOfDate?: string;
   reviewWindowDays: number;
+  source: 'docusign_mcp' | 'fixture';
   error: unknown;
 }): RenewalReviewWorkflowResult => ({
   status: 'error',
-  sourceLabel: 'Docusign MCP',
+  sourceLabel: source === 'fixture' ? 'Demo fixture' : 'Docusign MCP',
   asOfDate: asOfDate ?? new Date().toISOString().slice(0, 10),
   reviewWindowDays,
   message: 'The preview app could not invoke the Mastra renewal discovery workflow.',
