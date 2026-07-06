@@ -1,12 +1,14 @@
 'use client';
 
-import { AlertCircle, ExternalLink, FileSearch, Loader2, Search } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ExternalLink, FileSearch, Loader2, Search, Send } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RenewalAgreementTableRow,
+  RenewalDecisionResult,
   RenewalReviewWorkflowResult,
   RenewalRiskAgentGuidance,
   RenewalRiskFinding,
+  FollowUpAction,
 } from '@/mastra/domain/schemas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -43,6 +45,8 @@ const STAGE_BY_KIND: Record<string, number> = {
   'policy-tool-call': 2,
   'policy-tool-result': 2,
   'run-close': 3,
+  'human-approval': 3,
+  'workflow-builder': 3,
 };
 
 const statusLabels: Record<UiStatus, string> = {
@@ -52,6 +56,24 @@ const statusLabels: Record<UiStatus, string> = {
   empty: 'Empty',
   missing_fields: 'Missing fields',
   error: 'Error',
+};
+
+const FOLLOW_UP_ACTIONS = [
+  'no_action',
+  'owner_review',
+  'legal_review',
+  'renegotiate',
+  'prepare_cancellation_notice',
+  'escalate_missed_deadline',
+] as const satisfies FollowUpAction[];
+
+const followUpActionLabels: Record<FollowUpAction, string> = {
+  no_action: 'No action',
+  owner_review: 'Owner review',
+  legal_review: 'Legal review',
+  renegotiate: 'Renegotiate',
+  prepare_cancellation_notice: 'Prepare cancellation',
+  escalate_missed_deadline: 'Escalate missed deadline',
 };
 
 export default function RenewalDiscoveryPage() {
@@ -69,6 +91,9 @@ export default function RenewalDiscoveryPage() {
   const [status, setStatus] = useState<UiStatus>('idle');
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [selectedAgreementId, setSelectedAgreementId] = useState<string | null>(null);
+  const [decisionResults, setDecisionResults] = useState<Record<string, RenewalDecisionResult>>({});
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionLoadingId, setDecisionLoadingId] = useState<string | null>(null);
   const entryIdRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -91,6 +116,9 @@ export default function RenewalDiscoveryPage() {
         guidance => guidance.agreementId === selectedRow.agreementId,
       )) ??
     null;
+  const selectedDecisionResult = selectedRow
+    ? decisionResults[selectedRow.agreementId] ?? null
+    : null;
 
   const pushEntry = (kind: string, label: string, detail: string | null = null) => {
     entryIdRef.current += 1;
@@ -111,6 +139,8 @@ export default function RenewalDiscoveryPage() {
     setResult(null);
     setEntries([]);
     setSelectedAgreementId(null);
+    setDecisionResults({});
+    setDecisionError(null);
     pushEntry('run-open', 'Run opened', `As of ${asOfDate}`);
 
     const query = new URLSearchParams({
@@ -185,6 +215,62 @@ export default function RenewalDiscoveryPage() {
       });
       setStatus('error');
       pushEntry('error', 'Run failed', message);
+    }
+  }
+
+  async function submitDecision(input: {
+    row: RenewalAgreementTableRow;
+    finding: RenewalRiskFinding;
+    decision: 'approved' | 'edited' | 'rejected';
+    selectedAction: FollowUpAction;
+    notes: string;
+  }) {
+    setDecisionLoadingId(input.row.agreementId);
+    setDecisionError(null);
+
+    try {
+      const response = await fetch('/api/renewals/decisions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          row: input.row,
+          finding: input.finding,
+          decision: {
+            agreementId: input.row.agreementId,
+            decision: input.decision,
+            selectedAction: input.selectedAction,
+            reviewer: 'Demo Reviewer',
+            notes: input.notes,
+          },
+        }),
+      });
+      const payload = (await response.json()) as RenewalDecisionResult | { message?: string };
+
+      if (!response.ok) {
+        throw new Error('message' in payload ? payload.message ?? 'Decision failed.' : 'Decision failed.');
+      }
+
+      const resultPayload = payload as RenewalDecisionResult;
+      setDecisionResults(previous => ({
+        ...previous,
+        [input.row.agreementId]: resultPayload,
+      }));
+      pushEntry(
+        'human-approval',
+        `${input.row.supplier} ${input.decision === 'rejected' ? 'rejected' : 'approved'}`,
+        `${formatActionLabel(resultPayload.followUpPlan.action)} · ${resultPayload.followUpPlan.status}`,
+      );
+      pushEntry(
+        'workflow-builder',
+        workflowBuilderStatusLabel(resultPayload.workflowBuilder.status),
+        resultPayload.workflowBuilder.details,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDecisionError(message);
+      pushEntry('error', 'Decision failed', message);
+    } finally {
+      setDecisionLoadingId(null);
     }
   }
 
@@ -292,11 +378,12 @@ export default function RenewalDiscoveryPage() {
                           ) ?? null
                         }
                         selected={row.agreementId === selectedAgreementId}
-                        onSelect={() =>
+                        onSelect={() => {
+                          setDecisionError(null);
                           setSelectedAgreementId(current =>
                             current === row.agreementId ? null : row.agreementId,
-                          )
-                        }
+                          );
+                        }}
                       />
                     ))}
                   </TableBody>
@@ -307,6 +394,10 @@ export default function RenewalDiscoveryPage() {
                 row={selectedRow}
                 finding={selectedFinding}
                 guidance={selectedGuidance}
+                decisionResult={selectedDecisionResult}
+                decisionError={decisionError}
+                decisionPending={selectedRow?.agreementId === decisionLoadingId}
+                onSubmitDecision={submitDecision}
               />
             </div>
           ) : (
@@ -647,11 +738,33 @@ function RenewalDetailPanel({
   row,
   finding,
   guidance,
+  decisionResult,
+  decisionError,
+  decisionPending,
+  onSubmitDecision,
 }: {
   row: RenewalAgreementTableRow | null;
   finding: RenewalRiskFinding | null;
   guidance: RenewalRiskAgentGuidance | null;
+  decisionResult: RenewalDecisionResult | null;
+  decisionError: string | null;
+  decisionPending: boolean;
+  onSubmitDecision: (input: {
+    row: RenewalAgreementTableRow;
+    finding: RenewalRiskFinding;
+    decision: 'approved' | 'edited' | 'rejected';
+    selectedAction: FollowUpAction;
+    notes: string;
+  }) => Promise<void>;
 }) {
+  const [selectedAction, setSelectedAction] = useState<FollowUpAction>('owner_review');
+  const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    setSelectedAction(finding?.recommendedAction ?? 'owner_review');
+    setNotes('');
+  }, [row?.agreementId, finding?.recommendedAction]);
+
   if (!row) {
     return (
       <aside className="hidden rounded-lg border border-dashed bg-card xl:sticky xl:top-6 xl:block">
@@ -753,6 +866,19 @@ function RenewalDetailPanel({
         </div>
       ) : null}
 
+      <DecisionPanel
+        row={row}
+        finding={finding}
+        selectedAction={selectedAction}
+        setSelectedAction={setSelectedAction}
+        notes={notes}
+        setNotes={setNotes}
+        decisionResult={decisionResult}
+        decisionError={decisionError}
+        decisionPending={decisionPending}
+        onSubmitDecision={onSubmitDecision}
+      />
+
       <div className="flex flex-col gap-2 px-4 py-4">
         <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           Source record
@@ -775,6 +901,164 @@ function RenewalDetailPanel({
         {missing.length > 0 ? <MissingFieldsChip fields={missing} /> : null}
       </div>
     </aside>
+  );
+}
+
+function DecisionPanel({
+  row,
+  finding,
+  selectedAction,
+  setSelectedAction,
+  notes,
+  setNotes,
+  decisionResult,
+  decisionError,
+  decisionPending,
+  onSubmitDecision,
+}: {
+  row: RenewalAgreementTableRow;
+  finding: RenewalRiskFinding | null;
+  selectedAction: FollowUpAction;
+  setSelectedAction: (action: FollowUpAction) => void;
+  notes: string;
+  setNotes: (notes: string) => void;
+  decisionResult: RenewalDecisionResult | null;
+  decisionError: string | null;
+  decisionPending: boolean;
+  onSubmitDecision: (input: {
+    row: RenewalAgreementTableRow;
+    finding: RenewalRiskFinding;
+    decision: 'approved' | 'edited' | 'rejected';
+    selectedAction: FollowUpAction;
+    notes: string;
+  }) => Promise<void>;
+}) {
+  if (!finding) {
+    return null;
+  }
+
+  const submit = (
+    decision: 'approved' | 'edited' | 'rejected',
+    action: FollowUpAction,
+  ) =>
+    onSubmitDecision({
+      row,
+      finding,
+      decision,
+      selectedAction: action,
+      notes,
+    });
+
+  return (
+    <div className="border-b px-4 py-4">
+      <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-accent-foreground">
+        Human approval
+      </p>
+      <p className="mt-2 text-sm leading-6 text-foreground">
+        Approve the policy recommendation or override it before Workflow Builder acts.
+      </p>
+
+      <label className="mt-3 grid gap-1.5 text-xs font-medium text-muted-foreground">
+        Override action
+        <select
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={selectedAction}
+          onChange={event => setSelectedAction(event.target.value as FollowUpAction)}
+        >
+          {FOLLOW_UP_ACTIONS.map(action => (
+            <option key={action} value={action}>
+              {formatActionLabel(action)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mt-3 grid gap-1.5 text-xs font-medium text-muted-foreground">
+        Reviewer notes
+        <textarea
+          className="min-h-20 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={notes}
+          onChange={event => setNotes(event.target.value)}
+          placeholder="Add context for the request"
+        />
+      </label>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <Button
+          disabled={decisionPending}
+          onClick={() => submit('approved', finding.recommendedAction)}
+          size="sm"
+        >
+          {decisionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+          Approve
+        </Button>
+        <Button
+          disabled={decisionPending}
+          onClick={() => submit('edited', selectedAction)}
+          size="sm"
+          variant="secondary"
+        >
+          <Send className="size-4" />
+          Override
+        </Button>
+        <Button
+          disabled={decisionPending}
+          onClick={() => submit('rejected', 'no_action')}
+          size="sm"
+          variant="outline"
+        >
+          Reject
+        </Button>
+      </div>
+
+      {decisionError ? (
+        <p className="mt-3 rounded-md border border-urgent/30 bg-urgent-wash px-3 py-2 text-xs leading-5 text-urgent">
+          {decisionError}
+        </p>
+      ) : null}
+
+      {decisionResult ? <DecisionResultCard result={decisionResult} /> : null}
+    </div>
+  );
+}
+
+function DecisionResultCard({ result }: { result: RenewalDecisionResult }) {
+  return (
+    <div className="mt-4 rounded-md border bg-secondary px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-foreground">
+          {formatActionLabel(result.followUpPlan.action)}
+        </p>
+        <span className="rounded-full border border-border bg-card px-2 py-0.5 font-data text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+          {result.followUpPlan.status}
+        </span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        {result.followUpPlan.details}
+      </p>
+      <div className="mt-3 border-t pt-3">
+        <p className="font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          Workflow Builder
+        </p>
+        <p className="mt-1 text-xs leading-5 text-foreground">
+          {workflowBuilderStatusLabel(result.workflowBuilder.status)}
+        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {result.workflowBuilder.details}
+        </p>
+        {result.workflowBuilder.instanceUrl ? (
+          <a
+            href={result.workflowBuilder.instanceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-foreground underline-offset-2 hover:underline"
+          >
+            Open workflow instance
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -822,16 +1106,24 @@ function RiskClassification({ finding }: { finding: RenewalRiskFinding }) {
 }
 
 function ActionValue({ action }: { action: RenewalRiskFinding['recommendedAction'] }) {
-  const labels: Record<RenewalRiskFinding['recommendedAction'], string> = {
-    no_action: 'No action',
-    owner_review: 'Owner review',
-    legal_review: 'Legal review',
-    renegotiate: 'Renegotiate',
-    prepare_cancellation_notice: 'Prepare cancellation',
-    escalate_missed_deadline: 'Escalate missed deadline',
+  return <span className="whitespace-nowrap">{formatActionLabel(action)}</span>;
+}
+
+function formatActionLabel(action: FollowUpAction) {
+  return followUpActionLabels[action];
+}
+
+function workflowBuilderStatusLabel(
+  status: RenewalDecisionResult['workflowBuilder']['status'],
+) {
+  const labels: Record<typeof status, string> = {
+    not_configured: 'Workflow Builder not configured',
+    triggered: 'Workflow Builder started',
+    failed: 'Workflow Builder failed',
+    skipped: 'Workflow Builder skipped',
   };
 
-  return <span className="whitespace-nowrap">{labels[action]}</span>;
+  return labels[status];
 }
 
 function DataValue({ value }: { value: string | null }) {

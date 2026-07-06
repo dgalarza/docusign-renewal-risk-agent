@@ -13,13 +13,17 @@ Mapped against the 8-step demo flow in the Notion doc:
 | 3 | Agreement Manager extracts renewal terms | ⚠️ Depends on sandbox extraction actually populating the custom fields MCP returns |
 | 4 | Intake Agent queries via MCP for renewals in the configured review window | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
 | 5 | Risk Review Agent reviews each agreement against policy | ✅ Workflow-orchestrated: `renewalDiscoveryWorkflow` creates the deterministic `riskBrief`, then invokes the Risk Review Agent for bounded review judgment |
-| 6 | Human reviewer approves the recommended action | ❌ `humanDecisionSchema` exists; no checkpoint, no UI |
-| 7 | Workflow Builder starts follow-up after approval | ❌ `createFollowUpPlan` exists as a pure function; not wired |
-| 8 | Local decision trail recorded | ❌ Schema only |
+| 6 | Human reviewer approves the recommended action | ✅ Preview checkpoint: approve, override, or reject per agreement |
+| 7 | Workflow Builder starts follow-up after approval | ✅ Docusign MCP handoff is wired and approved follow-up actions trigger the configured Workflow Builder workflow |
+| 8 | Local decision trail recorded | ✅ Local JSONL trail under `.mastra/` |
 
-The preview UI (`src/app/page.tsx`) shows only the discovery table — no risk classification, detail view, decision controls, or follow-up output.
+The preview UI (`src/app/page.tsx`) now shows the orchestration ledger, risk
+classification, detail view, decision controls, and Workflow Builder handoff
+state.
 
-**Bottom line: discovery (steps 1–4) is done; the risk-review → human-approval → follow-up half of the demo (steps 5–8) is unbuilt.**
+**Bottom line: the demo path is now wired end to end for discovery → risk review
+→ human approval → Workflow Builder handoff. Mastra-native suspend/resume is
+still a future polish path, not the current implementation.**
 
 ## Decisions (from Notion open questions)
 
@@ -46,27 +50,30 @@ Keep classification deterministic (defensible in the demo narrative: "policy is 
 
 ## Phase 3 — Human approval checkpoint
 
-Use Mastra workflow suspend/resume — it demos "governed workflow" natively and shows up in Mastra Studio.
+Current implementation uses a lightweight preview/API checkpoint so the video
+can show the governed moment without fighting suspend/resume over HTTP. A
+Mastra-native suspend/resume checkpoint remains a later hardening option.
 
-- [ ] Add a `human-approval` step that suspends with the risk brief as suspend payload and resumes with an array of `humanDecisionSchema` decisions.
-- [ ] Extend `/api/renewals` (or add `/api/renewals/decide`) to resume the suspended run via the Mastra API (`resume-async`), passing the run ID back to the client from the initial response.
-- [ ] Fallback if suspend/resume over the HTTP API fights back: split into two workflows (discover+classify, then approve+follow-up) with the run state held client-side. Don't burn more than a couple hours on the suspend path before switching.
+- [x] Add a preview human-approval checkpoint for approve, override, and reject.
+- [x] Add `POST /api/renewals/decisions` to validate the selected row/finding and create a `humanDecisionSchema` decision.
+- [ ] Optional hardening: move the checkpoint into Mastra workflow suspend/resume once the video path is stable.
 
 ## Phase 4 — Follow-up plan + decision trail
 
-- [ ] Add a `follow-up` step after approval: `createFollowUpPlan` per approved/overridden finding; output `followUpPlanSchema[]`. Details text should name the Workflow Builder workflow that would start ("Docusign Follow-Up Actions" language, per the Notion pivot — no "Audit Targets" anywhere).
-- [ ] Record the decision trail locally: append `{ finding, decision, followUpPlan, timestamps }` to the existing LibSQL store or a `decision-trail.json` — simplest thing that supports the "auditable" claim on camera.
-- [ ] Expose the trail via a small API route so the UI can show it.
+- [x] Add follow-up plan creation after approval/override with `createFollowUpPlan`.
+- [x] Prepare the Docusign Workflow Builder trigger through MCP, using `docusign_getWorkflowTriggerRequirements` before `docusign_triggerWorkflow`.
+- [x] Record the decision trail locally as JSONL under `.mastra/`.
+- [ ] Optional hardening: expose the full trail via a small API route.
 
 ## Phase 5 — Preview UI: risk, decision, follow-up
 
 Extend `src/app/page.tsx` from a discovery table into the full review surface:
 
-- [ ] Add classification and recommended-action columns to the table (badge colors: standard / needs_review=warning / urgent / blocked=destructive).
-- [ ] Row click → detail panel: all extracted fields, extracted signals, rationale, recommended action — matching the "Example Output" list in the Notion doc.
-- [ ] Per-agreement decision controls: approve recommendation, override action (select from the follow-up enum), reject; reviewer name + notes.
-- [ ] Portfolio brief summary above the table (counts by classification, total value at risk).
-- [ ] After decisions submit: show follow-up plan per agreement and the decision-trail entries.
+- [x] Add classification to the table and recommended action in the detail panel.
+- [x] Row click → detail panel: extracted fields, signals, rationale, recommended action, and agent guidance.
+- [x] Per-agreement decision controls: approve recommendation, override action, reject, and reviewer notes.
+- [x] Portfolio brief summary above the table.
+- [x] After decisions submit: show follow-up plan and Workflow Builder handoff state per agreement.
 
 ## Phase 6 — Sandbox verification (the real risk)
 

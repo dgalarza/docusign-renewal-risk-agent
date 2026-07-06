@@ -4,23 +4,22 @@ export const createFollowUpPlan = (
   finding: RenewalRiskFinding,
   decision: HumanDecision,
 ): FollowUpPlan => {
-  if (decision.decision !== 'approved') {
+  if (decision.decision === 'rejected' || decision.selectedAction === 'no_action') {
     return {
       agreementId: finding.agreementId,
-      action: finding.recommendedAction,
+      action: decision.selectedAction,
       status: 'skipped',
       surface: 'Workflow Builder',
-      details: `Follow-up skipped because ${decision.reviewer} marked the recommendation as ${decision.decision}.`,
+      details: `Workflow Builder follow-up skipped because ${decision.reviewer} marked the recommendation as ${decision.decision}.`,
     };
   }
 
   return {
     agreementId: finding.agreementId,
-    action: finding.recommendedAction,
+    action: decision.selectedAction,
     status: 'planned',
     surface: 'Workflow Builder',
     details:
-      'Production path should start the configured Docusign Workflow Builder follow-up for this approved renewal-risk action.',
+      `Docusign Workflow Builder should start the approved ${decision.selectedAction} follow-up for this renewal-risk action.`,
   };
 };
-

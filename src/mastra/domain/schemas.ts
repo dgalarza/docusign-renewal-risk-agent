@@ -110,6 +110,7 @@ export const renewalReviewWorkflowResultSchema = renewalDiscoveryResultSchema.ex
 export const humanDecisionSchema = z.object({
   agreementId: z.string(),
   decision: z.enum(['approved', 'edited', 'rejected']),
+  selectedAction: followUpActionSchema,
   reviewer: z.string(),
   notes: z.string(),
   decidedAt: z.string(),
@@ -121,6 +122,30 @@ export const followUpPlanSchema = z.object({
   status: z.enum(['planned', 'skipped']),
   surface: z.literal('Workflow Builder'),
   details: z.string(),
+});
+
+export const workflowBuilderHandoffSchema = z.object({
+  workflowId: z.string().nullable(),
+  accountId: z.string().nullable(),
+  workflowName: z.string(),
+  status: z.enum([
+    'not_configured',
+    'triggered',
+    'failed',
+    'skipped',
+  ]),
+  details: z.string(),
+  triggerPayload: z.record(z.string(), z.unknown()).nullable(),
+  requirements: z.unknown().nullable(),
+  instanceId: z.string().nullable(),
+  instanceUrl: z.string().nullable(),
+  errors: z.array(z.string()),
+});
+
+export const renewalDecisionResultSchema = z.object({
+  decision: humanDecisionSchema,
+  followUpPlan: followUpPlanSchema,
+  workflowBuilder: workflowBuilderHandoffSchema,
 });
 
 export type SupplierRenewalAgreement = z.infer<typeof supplierRenewalAgreementSchema>;
@@ -137,3 +162,5 @@ export type RenewalRiskAgentJudgment = z.infer<typeof renewalRiskAgentJudgmentSc
 export type RenewalReviewWorkflowResult = z.infer<typeof renewalReviewWorkflowResultSchema>;
 export type HumanDecision = z.infer<typeof humanDecisionSchema>;
 export type FollowUpPlan = z.infer<typeof followUpPlanSchema>;
+export type WorkflowBuilderHandoff = z.infer<typeof workflowBuilderHandoffSchema>;
+export type RenewalDecisionResult = z.infer<typeof renewalDecisionResultSchema>;

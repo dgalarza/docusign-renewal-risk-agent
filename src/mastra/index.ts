@@ -31,9 +31,11 @@ export {
   docusignMcpClient,
 } from './mcp/docusign-mcp-client';
 export { createFollowUpPlan } from './tools/follow-up-tools';
+export { createWorkflowBuilderHandoff } from './tools/workflow-builder-tools';
 export type {
   FollowUpPlan,
   HumanDecision,
+  RenewalDecisionResult,
   RenewalAgreementTableRow,
   RenewalDiscoveryResult,
   RenewalRiskAgentGuidance,
@@ -42,6 +44,7 @@ export type {
   RenewalRiskBrief,
   RenewalRiskFinding,
   SupplierRenewalAgreement,
+  WorkflowBuilderHandoff,
 } from './domain/schemas';
 
 const libSqlStore = new LibSQLStore({
