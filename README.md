@@ -114,12 +114,9 @@ human decision to `POST /api/renewals/decisions`, which:
 - calls `docusign_getWorkflowTriggerRequirements` to prepare the Workflow
   Builder handoff when `DOCUSIGN_WORKFLOW_ID` and `DOCUSIGN_ACCOUNT_ID` are
   configured;
-- calls `docusign_triggerWorkflow` only when
-  `DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=true`.
+- calls `docusign_triggerWorkflow` for approved or overridden follow-up actions.
 
-Keep `DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=false` for dry-run recording. Turn it
-on only when the sandbox workflow is published and you want approvals to create
-live Workflow Builder instances.
+Rejected decisions and `no_action` overrides skip Workflow Builder.
 
 ## Live Run Progress
 

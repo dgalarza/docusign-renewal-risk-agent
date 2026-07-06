@@ -130,7 +130,6 @@ export const workflowBuilderHandoffSchema = z.object({
   workflowName: z.string(),
   status: z.enum([
     'not_configured',
-    'ready_to_start',
     'triggered',
     'failed',
     'skipped',

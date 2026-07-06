@@ -1118,7 +1118,6 @@ function workflowBuilderStatusLabel(
 ) {
   const labels: Record<typeof status, string> = {
     not_configured: 'Workflow Builder not configured',
-    ready_to_start: 'Workflow Builder ready',
     triggered: 'Workflow Builder started',
     failed: 'Workflow Builder failed',
     skipped: 'Workflow Builder skipped',

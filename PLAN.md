@@ -14,7 +14,7 @@ Mapped against the 8-step demo flow in the Notion doc:
 | 4 | Intake Agent queries via MCP for renewals in the configured review window | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
 | 5 | Risk Review Agent reviews each agreement against policy | ✅ Workflow-orchestrated: `renewalDiscoveryWorkflow` creates the deterministic `riskBrief`, then invokes the Risk Review Agent for bounded review judgment |
 | 6 | Human reviewer approves the recommended action | ✅ Preview checkpoint: approve, override, or reject per agreement |
-| 7 | Workflow Builder starts follow-up after approval | ✅ Docusign MCP handoff is wired; live trigger is gated by `DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=true` |
+| 7 | Workflow Builder starts follow-up after approval | ✅ Docusign MCP handoff is wired and approved follow-up actions trigger the configured Workflow Builder workflow |
 | 8 | Local decision trail recorded | ✅ Local JSONL trail under `.mastra/` |
 
 The preview UI (`src/app/page.tsx`) now shows the orchestration ledger, risk

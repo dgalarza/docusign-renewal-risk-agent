@@ -78,22 +78,6 @@ export const createWorkflowBuilderHandoff = async ({
     });
     const requirements = parseMcpTextPayload(requirementsResponse) ?? requirementsResponse;
 
-    if (process.env.DOCUSIGN_WORKFLOW_TRIGGER_ENABLED !== 'true') {
-      return {
-        workflowId,
-        accountId,
-        workflowName,
-        status: 'ready_to_start',
-        details:
-          'Workflow Builder trigger payload prepared. Set DOCUSIGN_WORKFLOW_TRIGGER_ENABLED=true to start the workflow from the app.',
-        triggerPayload,
-        requirements,
-        instanceId: null,
-        instanceUrl: null,
-        errors: [],
-      };
-    }
-
     const triggerWorkflowTool = tools[TRIGGER_WORKFLOW_TOOL];
 
     if (!triggerWorkflowTool) {
