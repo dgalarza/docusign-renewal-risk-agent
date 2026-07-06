@@ -225,21 +225,17 @@ export default function RenewalDiscoveryPage() {
           ) : null}
 
           <section className="overflow-x-auto rounded-lg border bg-card">
-            <Table className="min-w-[1480px]">
+            <Table className="min-w-[1120px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Supplier</TableHead>
                   <TableHead>Agreement</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Renewal date</TableHead>
                   <TableHead>Notice period</TableHead>
                   <TableHead>Notice deadline</TableHead>
                   <TableHead className="text-right">Days to notice</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Renewal type</TableHead>
-                  <TableHead>Termination right</TableHead>
-                  <TableHead>Termination fee</TableHead>
-                  <TableHead>Business owner</TableHead>
                   <TableHead>Risk</TableHead>
                   <TableHead>Recommended action</TableHead>
                   <TableHead>Source record</TableHead>
@@ -258,7 +254,7 @@ export default function RenewalDiscoveryPage() {
                   ))
                 ) : (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={15}>
+                    <TableCell className="h-32 text-center text-sm text-muted-foreground" colSpan={11}>
                       {emptyStateMessage(status)}
                     </TableCell>
                   </TableRow>
@@ -507,9 +503,6 @@ function AgreementRow({
       <TableCell className="font-medium text-foreground">{row.supplier}</TableCell>
       <TableCell className="text-muted-foreground">{row.agreementTitle}</TableCell>
       <TableCell>
-        <StatusValue status={row.agreementStatus} />
-      </TableCell>
-      <TableCell>
         <DataValue value={row.renewalDate} />
       </TableCell>
       <TableCell>
@@ -527,13 +520,6 @@ function AgreementRow({
       <TableCell>
         <RenewalTypeLabel value={row.renewalType} />
       </TableCell>
-      <TableCell>
-        <TerminationRightValue value={row.hasTerminationForConvenience} />
-      </TableCell>
-      <TableCell>
-        <ExtractedText value={row.terminationFee} />
-      </TableCell>
-      <TableCell>{row.businessOwner}</TableCell>
       <TableCell>
         {finding ? <RiskClassification finding={finding} /> : <NotExtracted />}
       </TableCell>
@@ -587,14 +573,6 @@ function ActionValue({ action }: { action: RenewalRiskFinding['recommendedAction
   };
 
   return <span className="whitespace-nowrap">{labels[action]}</span>;
-}
-
-function StatusValue({ status }: { status: RenewalAgreementTableRow['agreementStatus'] }) {
-  if (!status) {
-    return <NotExtracted />;
-  }
-
-  return status === 'uploaded_historical' ? 'Uploaded historical' : 'Completed';
 }
 
 function DataValue({ value }: { value: string | null }) {
@@ -681,18 +659,6 @@ function RenewalTypeLabel({ value }: { value: RenewalAgreementTableRow['renewalT
       {labels[value]}
     </span>
   );
-}
-
-function TerminationRightValue({ value }: { value: boolean | null }) {
-  if (value === null) {
-    return <NotExtracted />;
-  }
-
-  return value ? 'Yes' : 'No';
-}
-
-function ExtractedText({ value }: { value: string }) {
-  return value === 'Not extracted' ? <NotExtracted /> : value;
 }
 
 function MissingFieldsChip({ fields }: { fields: string[] }) {

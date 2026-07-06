@@ -111,6 +111,26 @@ test('maps discovery rows and derives missing notice deadlines', () => {
   assert.equal(classifyRenewalRisk(mappedAgreement, fixture.metadata.asOfDate).classification, 'urgent');
 });
 
+test('treats invalid extracted dates as missing policy inputs', () => {
+  const invalidDateRow = renewalAgreementTableRowSchema.parse({
+    ...completeAutoRenewalRow,
+    agreementId: 'row-invalid-dates',
+    renewalDate: 'Not extracted',
+    noticeDeadline: 'Pending extraction',
+    source: {
+      ...completeAutoRenewalRow.source,
+      recordId: 'row-invalid-dates',
+      missingFields: ['renewalDate', 'noticeDeadline'],
+    },
+  });
+
+  const mappedAgreement = mapRenewalRowToAgreement(invalidDateRow);
+  const finding = classifyRenewalRisk(mappedAgreement, fixture.metadata.asOfDate);
+
+  assert.equal(finding.daysUntilNoticeDeadline, null);
+  assert.equal(finding.classification, 'needs_review');
+});
+
 test('routes missing agreement value to review when renewal risk is present', () => {
   const missingValueRow = renewalAgreementTableRowSchema.parse({
     ...completeAutoRenewalRow,

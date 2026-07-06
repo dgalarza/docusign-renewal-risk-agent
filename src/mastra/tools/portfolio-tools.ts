@@ -143,9 +143,11 @@ export const mapRenewalRowToAgreement = (
   agreementValue: row.agreementValue,
   currency: row.currency,
   renewalType: row.renewalType,
-  renewalDate: row.renewalDate,
+  renewalDate: normalizeIsoDate(row.renewalDate),
   noticePeriodDays: row.noticePeriodDays,
-  noticeDeadline: row.noticeDeadline ?? deriveNoticeDeadline(row.renewalDate, row.noticePeriodDays),
+  noticeDeadline:
+    normalizeIsoDate(row.noticeDeadline) ??
+    deriveNoticeDeadline(row.renewalDate, row.noticePeriodDays),
   hasTerminationForConvenience: row.hasTerminationForConvenience,
   terminationFee: row.terminationFee,
   businessOwner: row.businessOwner,
@@ -165,26 +167,43 @@ const isInReviewWindow = (
   }
 
   const daysUntilRenewal = dateDiffDays(asOfDate, agreement.renewalDate);
+  if (daysUntilRenewal === null) {
+    return true;
+  }
+
   return daysUntilRenewal >= 0 && daysUntilRenewal <= reviewWindowDays;
 };
 
 const dateDiffDays = (fromDate: string, toDate: string) => {
   const from = new Date(`${fromDate}T00:00:00.000Z`);
   const to = new Date(`${toDate}T00:00:00.000Z`);
-  return Math.ceil((to.getTime() - from.getTime()) / 86_400_000);
+  const diff = Math.ceil((to.getTime() - from.getTime()) / 86_400_000);
+
+  return Number.isFinite(diff) ? diff : null;
 };
 
 const deriveNoticeDeadline = (
   renewalDate: string | null,
   noticePeriodDays: number | null,
 ): string | null => {
-  if (!renewalDate || noticePeriodDays === null) {
+  const normalizedRenewalDate = normalizeIsoDate(renewalDate);
+
+  if (!normalizedRenewalDate || noticePeriodDays === null) {
     return null;
   }
 
-  const deadline = new Date(`${renewalDate}T00:00:00.000Z`);
+  const deadline = new Date(`${normalizedRenewalDate}T00:00:00.000Z`);
   deadline.setUTCDate(deadline.getUTCDate() - noticePeriodDays);
   return deadline.toISOString().slice(0, 10);
+};
+
+const normalizeIsoDate = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : value;
 };
 
 type PolicyCandidate = {
