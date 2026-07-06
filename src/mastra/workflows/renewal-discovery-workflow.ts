@@ -4,13 +4,14 @@ import { z } from 'zod';
 import {
   renewalAgreementTableRowSchema,
   renewalDiscoveryResultSchema,
-  renewalRiskBriefSchema,
   renewalRiskAgentJudgmentSchema,
   renewalReviewWorkflowResultSchema,
   supplierRenewalAgreementSchema,
   type RenewalAgreementTableRow,
   type RenewalDiscoveryResult,
+  type RenewalRiskBrief,
   type RenewalRiskAgentJudgment,
+  type RenewalRiskFinding,
   type RenewalReviewWorkflowResult,
   type SupplierRenewalAgreement,
 } from '../domain/schemas';
@@ -21,6 +22,7 @@ import {
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
 const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', import.meta.url);
+const RISK_REVIEW_AGENT_TIMEOUT_MS = 8_000;
 
 export type RenewalDiscoveryProgress = {
   type: 'renewal-progress';
@@ -144,7 +146,7 @@ const riskReviewStep = createStep({
     'Risk Review Agent maps discovered rows into policy-ready agreements and creates a deterministic renewal risk brief.',
   inputSchema: renewalDiscoveryResultSchema,
   outputSchema: renewalReviewWorkflowResultSchema,
-  execute: async ({ inputData, mastra, writer }) => {
+  execute: async ({ inputData, runId, mastra, writer }) => {
     const emitProgress = (progress: Omit<RenewalDiscoveryProgress, 'type'>) => {
       void writer
         .write({ type: 'renewal-progress', ...progress } satisfies RenewalDiscoveryProgress)
@@ -162,49 +164,55 @@ const riskReviewStep = createStep({
     let riskReview: RenewalRiskAgentJudgment | null = null;
 
     if (agreements.length > 0) {
-      if (!mastra) {
-        throw new Error('Mastra instance is required to resolve the Risk Review Agent.');
-      }
-
-      const riskReviewAgent = mastra.getAgent('riskReviewAgent');
-
       emitProgress({
         kind: 'risk-review',
         label: 'Risk Review Agent reviewing policy-ready agreements',
         detail: `${agreements.length} ${agreements.length === 1 ? 'agreement' : 'agreements'} mapped from discovery rows`,
       });
 
-      const agentResult = await riskReviewAgent.generate(
-        buildRiskReviewAgentPrompt({
-          agreements,
-          asOfDate: inputData.asOfDate,
-          reviewWindowDays: inputData.reviewWindowDays,
-        }),
-        {
-          maxSteps: 4,
-          runId: `workflow-risk-review-${inputData.asOfDate}`,
-          toolChoice: { type: 'tool', toolName: 'createRenewalRiskBriefTool' },
-          structuredOutput: { schema: renewalRiskAgentJudgmentSchema },
-          onChunk: chunk => {
-            if (chunk.type === 'tool-call') {
-              emitProgress({
-                kind: 'policy-tool-call',
-                label: `Risk Review Agent calling ${chunk.payload.toolName}`,
-                detail: 'Deterministic renewal policy classifying agreements',
-              });
-            } else if (chunk.type === 'tool-result') {
-              emitProgress({
-                kind: 'policy-tool-result',
-                label: `${chunk.payload.toolName} returned policy brief`,
-                detail: null,
-              });
-            }
-          },
-        },
-      );
+      emitProgress({
+        kind: 'policy-tool-call',
+        label: 'Creating deterministic policy brief',
+        detail: 'Deterministic renewal policy classifying agreements',
+      });
 
-      riskBrief = extractRiskBriefToolResult(agentResult);
-      riskReview = renewalRiskAgentJudgmentSchema.parse(agentResult.object);
+      riskBrief = createRenewalRiskBrief(agreements, {
+        asOfDate: inputData.asOfDate,
+        reviewWindowDays: inputData.reviewWindowDays,
+      });
+
+      emitProgress({
+        kind: 'policy-tool-result',
+        label: 'Deterministic policy brief created',
+        detail: null,
+      });
+
+      riskReview = createRiskReviewJudgment(riskBrief);
+
+      if (mastra) {
+        const riskReviewAgent = mastra.getAgent('riskReviewAgent');
+
+        emitProgress({
+          kind: 'risk-review',
+          label: 'Risk Review Agent applying judgment',
+          detail: 'Prioritizing the policy brief for human review',
+        });
+
+        riskReview =
+          (await generateRiskReviewAgentJudgment({
+            riskReviewAgent,
+            riskBrief,
+            runId: `workflow-${runId}-risk-review`,
+          }).catch(error => {
+            emitProgress({
+              kind: 'risk-review',
+              label: 'Risk Review Agent judgment fallback',
+              detail: error instanceof Error ? error.message : String(error),
+            });
+
+            return null;
+          })) ?? riskReview;
+      }
     }
 
     const result = renewalReviewWorkflowResultSchema.parse({
@@ -238,93 +246,157 @@ const describeToolArgs = (args: unknown): string | null => {
   return typeof reviewStatus === 'string' ? `Review status ${reviewStatus}` : null;
 };
 
-const buildRiskReviewAgentPrompt = (input: {
-  agreements: SupplierRenewalAgreement[];
-  asOfDate: string;
-  reviewWindowDays: number;
-}) => `Create the renewal risk brief for these policy-ready supplier agreements.
+const generateRiskReviewAgentJudgment = async ({
+  riskReviewAgent,
+  riskBrief,
+  runId,
+}: {
+  riskReviewAgent: {
+    generate: (
+      prompt: string,
+      options: {
+        maxSteps: number;
+        runId: string;
+        toolChoice: 'none';
+        structuredOutput: { schema: typeof renewalRiskAgentJudgmentSchema };
+        abortSignal: AbortSignal;
+        modelSettings: {
+          temperature: number;
+          maxOutputTokens: number;
+          reasoning: 'low';
+        };
+      },
+    ) => Promise<{ object?: unknown }>;
+  };
+  riskBrief: RenewalRiskBrief;
+  runId: string;
+}): Promise<RenewalRiskAgentJudgment> => {
+  const abortController = new AbortController();
+  const timeout = setTimeout(
+    () => abortController.abort('Risk Review Agent judgment timed out.'),
+    RISK_REVIEW_AGENT_TIMEOUT_MS,
+  );
 
-First call createRenewalRiskBriefTool. Treat that tool result as the source of truth for:
-- classifications
-- recommended actions
-- notice-deadline math
-- extracted signals
+  try {
+    const agentResult = await riskReviewAgent.generate(
+      buildRiskReviewAgentJudgmentPrompt(riskBrief),
+      {
+        maxSteps: 1,
+        runId,
+        toolChoice: 'none',
+        structuredOutput: { schema: renewalRiskAgentJudgmentSchema },
+        abortSignal: abortController.signal,
+        modelSettings: {
+          temperature: 0,
+          maxOutputTokens: 700,
+          reasoning: 'low',
+        },
+      },
+    );
 
-Then apply procurement judgment for the human reviewer. You may prioritize, summarize, and explain what a reviewer should focus on, but do not change any policy classification or recommended action.
-
-Return one RenewalRiskAgentJudgment JSON object:
-- portfolioJudgment should state the practical renewal-risk readout.
-- priorityAgreementIds should order the agreements a human should review first.
-- reviewerGuidance should include judgment and reasonForPriority for each reviewed agreement.
-- suggestedReviewer must be one of procurement_owner, legal, executive_escalation, or none.
-
-Tool input:
-${JSON.stringify(
-  {
-    agreements: input.agreements,
-    asOfDate: input.asOfDate,
-    reviewWindowDays: input.reviewWindowDays,
-  },
-  null,
-  2,
-)}`;
-
-const extractRiskBriefToolResult = (agentResult: unknown) => {
-  const toolResults = (agentResult as { toolResults?: unknown }).toolResults;
-
-  if (!Array.isArray(toolResults)) {
-    throw new Error('Risk Review Agent did not return deterministic policy tool results.');
+    return renewalRiskAgentJudgmentSchema.parse(agentResult.object);
+  } finally {
+    clearTimeout(timeout);
   }
-
-  for (const result of toolResults) {
-    if (!isRenewalRiskBriefToolResult(result)) {
-      continue;
-    }
-
-    for (const candidate of getToolResultOutputCandidates(result)) {
-      const parsed = renewalRiskBriefSchema.safeParse(candidate);
-
-      if (parsed.success) {
-        return parsed.data;
-      }
-    }
-  }
-
-  throw new Error('Risk Review Agent did not return a valid deterministic renewal risk brief.');
 };
 
-const isRenewalRiskBriefToolResult = (result: unknown) => {
-  if (!result || typeof result !== 'object') {
-    return false;
-  }
+const buildRiskReviewAgentJudgmentPrompt = (riskBrief: RenewalRiskBrief) =>
+  `You are the Risk Review Agent. The deterministic policy tool already produced this canonical renewal risk brief.
 
-  const record = result as Record<string, unknown>;
-  const payload = record.payload;
-  const payloadRecord =
-    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
-  const toolName = record.toolName ?? record.name ?? payloadRecord?.toolName ?? payloadRecord?.name;
+Do not change classifications, recommended actions, deadline math, or extracted signals.
+Apply judgment for the human reviewer:
+- portfolioJudgment: one concise sentence naming what needs attention.
+- priorityAgreementIds: agreement IDs ordered by review priority.
+- reviewerGuidance: one entry per finding with practical judgment, reasonForPriority, and suggestedReviewer.
 
-  return toolName === 'createRenewalRiskBriefTool' || toolName === 'create-renewal-risk-brief';
+Return only the requested RenewalRiskAgentJudgment structure.
+
+Policy brief:
+${JSON.stringify(riskBrief, null, 2)}`;
+
+const createRiskReviewJudgment = (
+  riskBrief: RenewalRiskBrief,
+): RenewalRiskAgentJudgment => {
+  const rankedFindings = [...riskBrief.findings].sort(compareFindingsByReviewPriority);
+  const urgentOrBlocked = rankedFindings.filter(
+    finding => finding.classification === 'urgent' || finding.classification === 'blocked',
+  ).length;
+  const legalReviews = rankedFindings.filter(
+    finding => finding.recommendedAction === 'legal_review',
+  ).length;
+
+  return {
+    portfolioJudgment:
+      riskBrief.agreementsReviewed === 0
+        ? 'No agreements need renewal-risk review in this window.'
+        : `${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'needs' : 'need'} review; ${urgentOrBlocked} ${urgentOrBlocked === 1 ? 'is' : 'are'} urgent or blocked, and ${legalReviews} ${legalReviews === 1 ? 'needs' : 'need'} legal attention.`,
+    priorityAgreementIds: rankedFindings.map(finding => finding.agreementId),
+    reviewerGuidance: rankedFindings.map(finding => ({
+      agreementId: finding.agreementId,
+      judgment: buildFindingJudgment(finding),
+      reasonForPriority: finding.rationale,
+      suggestedReviewer: getSuggestedReviewer(finding),
+    })),
+  };
 };
 
-const getToolResultOutputCandidates = (result: unknown) => {
-  if (!result || typeof result !== 'object') {
-    return [];
+const compareFindingsByReviewPriority = (
+  left: RenewalRiskFinding,
+  right: RenewalRiskFinding,
+) => getFindingPriority(right) - getFindingPriority(left);
+
+const getFindingPriority = (finding: RenewalRiskFinding) => {
+  const severityScore = {
+    standard: 0,
+    needs_review: 10,
+    urgent: 20,
+    blocked: 30,
+  }[finding.classification];
+  const legalScore = finding.recommendedAction === 'legal_review' ? 2 : 0;
+  const deadlineScore =
+    finding.daysUntilNoticeDeadline !== null
+      ? Math.max(0, 45 - finding.daysUntilNoticeDeadline) / 45
+      : 0;
+
+  return severityScore + legalScore + deadlineScore;
+};
+
+const buildFindingJudgment = (finding: RenewalRiskFinding) => {
+  if (finding.classification === 'blocked') {
+    return `${finding.supplierName} should be escalated first because the notice window has already closed.`;
   }
 
-  const record = result as Record<string, unknown>;
-  const payload = record.payload;
-  const payloadRecord =
-    payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null;
+  if (finding.classification === 'urgent') {
+    return `${finding.supplierName} needs owner confirmation before the notice window closes.`;
+  }
 
-  return [
-    record.result,
-    record.output,
-    payloadRecord?.result,
-    payloadRecord?.output,
-    payload,
-    result,
-  ];
+  if (finding.recommendedAction === 'legal_review') {
+    return `${finding.supplierName} should go to legal because the extracted renewal or termination terms are not safe to accept as-is.`;
+  }
+
+  if (finding.classification === 'needs_review') {
+    return `${finding.supplierName} needs procurement review before renewal intent is accepted.`;
+  }
+
+  return `${finding.supplierName} can stay on the watchlist because no high-risk renewal signal was found.`;
+};
+
+const getSuggestedReviewer = (
+  finding: RenewalRiskFinding,
+): RenewalRiskAgentJudgment['reviewerGuidance'][number]['suggestedReviewer'] => {
+  if (finding.classification === 'blocked') {
+    return 'executive_escalation';
+  }
+
+  if (finding.recommendedAction === 'legal_review') {
+    return 'legal';
+  }
+
+  if (finding.recommendedAction === 'no_action') {
+    return 'none';
+  }
+
+  return 'procurement_owner';
 };
 
 const buildIntakeAgentRenewalPrompt = (input: {
