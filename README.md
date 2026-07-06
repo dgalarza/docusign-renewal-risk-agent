@@ -74,8 +74,8 @@ The command emits the same workflow result shape as the live path:
 The preview path calls Docusign MCP and labels the table source as
 `Docusign MCP`. MCP errors and missing Docusign fields are shown directly; the
 fixture mode above is a local/demo command for repeatable risk-review runs.
-The preview defaults to a 45-day review window so the local demo reviews the
-most urgent agreements instead of every fixture document.
+The preview defaults to a 90-day review window and keeps the Risk Review Agent
+focused on the top findings so the local demo stays legible.
 
 The expected Agreement Manager field contract is documented in
 `docs/agreement-manager-field-mapping.md`. Use that document when configuring
@@ -87,7 +87,7 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
 2. Run `npm run auth:docusign` to complete the Docusign OAuth flow and paste the
    returned token values into `.env`.
 3. Run `npm run inspect:mcp` to verify MCP tool discovery.
-4. Run `npm run inspect:mcp discover 2026-07-05 45` to run the workflow. The
+4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the workflow. The
    workflow invokes the Intake Agent, which receives Docusign MCP tools through
    Mastra `MCPClient.listTools()` and calls Agreement Manager before rows are
    normalized for the preview table. The workflow then creates a deterministic

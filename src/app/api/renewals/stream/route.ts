@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const DEFAULT_MASTRA_API_URL = 'http://127.0.0.1:4111/api';
 const RENEWAL_DISCOVERY_WORKFLOW_ID = 'renewalDiscoveryWorkflow';
 const RENEWAL_DISCOVERY_REQUEST =
-  'Find supplier agreements renewing in the next 45 days.';
+  'Find supplier agreements renewing in the next 90 days.';
 const MASTRA_RECORD_SEPARATOR = '\x1E';
 
 type ProgressEvent = {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const asOfDate =
     requestUrl.searchParams.get('asOfDate') ?? new Date().toISOString().slice(0, 10);
   const reviewWindowDays = Number(
-    requestUrl.searchParams.get('reviewWindowDays') ?? 45,
+    requestUrl.searchParams.get('reviewWindowDays') ?? 90,
   );
   const runId = crypto.randomUUID();
 

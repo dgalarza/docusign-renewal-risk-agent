@@ -42,10 +42,10 @@ export type RenewalDiscoveryProgress = {
 export const renewalDiscoveryWorkflowInputSchema = z.object({
   request: z
     .string()
-    .default('Find supplier agreements renewing in the next 45 days.'),
+    .default('Find supplier agreements renewing in the next 90 days.'),
   source: z.enum(['docusign_mcp', 'fixture']).default('docusign_mcp'),
   asOfDate: z.string().optional(),
-  reviewWindowDays: z.number().default(45),
+  reviewWindowDays: z.number().default(90),
 });
 
 const intakeAgentFindRenewalsStep = createStep({
@@ -341,7 +341,9 @@ ${JSON.stringify(
 const createRiskReviewJudgment = (
   riskBrief: RenewalRiskBrief,
 ): RenewalRiskAgentJudgment => {
-  const rankedFindings = [...riskBrief.findings].sort(compareFindingsByReviewPriority);
+  const rankedFindings = [...riskBrief.findings].sort((left, right) =>
+    compareFindingsByReviewPriority(left, right, riskBrief.reviewWindowDays),
+  );
   const urgentOrBlocked = rankedFindings.filter(
     finding => finding.classification === 'urgent' || finding.classification === 'blocked',
   ).length;
@@ -367,9 +369,15 @@ const createRiskReviewJudgment = (
 const compareFindingsByReviewPriority = (
   left: RenewalRiskFinding,
   right: RenewalRiskFinding,
-) => getFindingPriority(right) - getFindingPriority(left);
+  reviewWindowDays: number,
+) =>
+  getFindingPriority(right, reviewWindowDays) -
+  getFindingPriority(left, reviewWindowDays);
 
-const getFindingPriority = (finding: RenewalRiskFinding) => {
+const getFindingPriority = (
+  finding: RenewalRiskFinding,
+  reviewWindowDays: number,
+) => {
   const severityScore = {
     standard: 0,
     needs_review: 10,
@@ -379,7 +387,8 @@ const getFindingPriority = (finding: RenewalRiskFinding) => {
   const legalScore = finding.recommendedAction === 'legal_review' ? 2 : 0;
   const deadlineScore =
     finding.daysUntilNoticeDeadline !== null
-      ? Math.max(0, 45 - finding.daysUntilNoticeDeadline) / 45
+      ? Math.max(0, reviewWindowDays - finding.daysUntilNoticeDeadline) /
+        reviewWindowDays
       : 0;
 
   return severityScore + legalScore + deadlineScore;

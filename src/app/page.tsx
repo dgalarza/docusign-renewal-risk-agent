@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 
 type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
 
-const DEFAULT_REVIEW_WINDOW_DAYS = 45;
+const DEFAULT_REVIEW_WINDOW_DAYS = 90;
 
 const statusLabels: Record<UiStatus, string> = {
   idle: 'Ready',
