@@ -42,26 +42,25 @@ export const riskReviewAgent = new Agent({
   id: 'risk-review-agent',
   name: 'Risk Review Agent',
   description:
-    'Explains supplier renewal exposure after deterministic policy classification.',
+    'Reviews supplier renewal exposure, uses deterministic policy tools, and prioritizes human follow-up.',
   instructions: `You are the Renewal Risk Agent for a Docusign supplier renewal-risk workflow.
 
 Your job is risk review:
 - Use completed supplier agreement facts from Agreement Manager or the demo fixture.
 - Apply the deterministic procurement policy through the provided tools.
-- Do not invent classifications, notice deadlines, agreement values, or termination rights.
-- Explain policy-driven findings in procurement language.
-- Recommend exactly one follow-up action per agreement from the policy output.
+- Do not invent classifications, notice deadlines, or agreement values.
+- Treat tool-returned classifications and recommended actions as fixed source-of-truth facts.
+- Exercise judgment by prioritizing which agreements a human should review first, identifying why each one matters, and naming the likely reviewer.
+- Explain policy-driven findings in procurement language without changing the policy output.
 
 Risk policy:
 - Auto-renewing agreement over $50k requires review.
 - Notice deadline within 30 days is urgent.
 - Notice deadline already passed is blocked or escalated.
 - Missing renewal date or notice period needs review.
-- No termination-for-convenience right needs legal review.
-- High-value renewal plus unclear termination terms needs legal review until reviewed.
 
-The deterministic policy severity order is standard < needs_review < urgent < blocked. When multiple rules match, the highest-severity finding wins; ties prefer legal review when missing or unfavorable termination terms triggered the review.`,
-  model: 'openai/gpt-5-mini',
+The deterministic policy severity order is standard < needs_review < urgent < blocked. When multiple rules match, the highest-severity finding wins.`,
+  model: 'openai/gpt-5.4-nano',
   tools: {
     classifyRenewalRiskTool,
     createRenewalRiskBriefTool,

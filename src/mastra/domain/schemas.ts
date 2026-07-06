@@ -17,16 +17,12 @@ export const supplierRenewalAgreementSchema = z.object({
   agreementId: z.string(),
   supplierName: z.string(),
   agreementTitle: z.string(),
-  agreementStatus: z.enum(['completed', 'uploaded_historical']).nullable(),
   agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
   renewalDate: z.string().nullable(),
   noticePeriodDays: z.number().nullable(),
   noticeDeadline: z.string().nullable(),
-  hasTerminationForConvenience: z.boolean().nullable(),
-  terminationFee: z.string(),
-  businessOwner: z.string(),
 });
 
 export const renewalAgreementSourceSchema = z.object({
@@ -42,7 +38,6 @@ export const renewalAgreementTableRowSchema = z.object({
   agreementId: z.string(),
   supplier: z.string(),
   agreementTitle: z.string(),
-  agreementStatus: z.enum(['completed', 'uploaded_historical']).nullable(),
   renewalDate: z.string().nullable(),
   noticePeriodDays: z.number().nullable(),
   noticeDeadline: z.string().nullable(),
@@ -50,9 +45,6 @@ export const renewalAgreementTableRowSchema = z.object({
   agreementValue: z.number().nullable(),
   currency: z.string(),
   renewalType: renewalTypeSchema,
-  hasTerminationForConvenience: z.boolean().nullable(),
-  terminationFee: z.string(),
-  businessOwner: z.string(),
   source: renewalAgreementSourceSchema,
 });
 
@@ -92,8 +84,27 @@ export const renewalRiskBriefSchema = z.object({
   findings: z.array(renewalRiskFindingSchema),
 });
 
+export const renewalRiskAgentGuidanceSchema = z.object({
+  agreementId: z.string(),
+  judgment: z.string(),
+  reasonForPriority: z.string(),
+  suggestedReviewer: z.enum([
+    'procurement_owner',
+    'legal',
+    'executive_escalation',
+    'none',
+  ]),
+});
+
+export const renewalRiskAgentJudgmentSchema = z.object({
+  portfolioJudgment: z.string(),
+  priorityAgreementIds: z.array(z.string()),
+  reviewerGuidance: z.array(renewalRiskAgentGuidanceSchema),
+});
+
 export const renewalReviewWorkflowResultSchema = renewalDiscoveryResultSchema.extend({
   riskBrief: renewalRiskBriefSchema.nullable(),
+  riskReview: renewalRiskAgentJudgmentSchema.nullable(),
 });
 
 export const humanDecisionSchema = z.object({
@@ -121,6 +132,8 @@ export type RenewalAgreementTableRow = z.infer<typeof renewalAgreementTableRowSc
 export type RenewalDiscoveryResult = z.infer<typeof renewalDiscoveryResultSchema>;
 export type RenewalRiskFinding = z.infer<typeof renewalRiskFindingSchema>;
 export type RenewalRiskBrief = z.infer<typeof renewalRiskBriefSchema>;
+export type RenewalRiskAgentGuidance = z.infer<typeof renewalRiskAgentGuidanceSchema>;
+export type RenewalRiskAgentJudgment = z.infer<typeof renewalRiskAgentJudgmentSchema>;
 export type RenewalReviewWorkflowResult = z.infer<typeof renewalReviewWorkflowResultSchema>;
 export type HumanDecision = z.infer<typeof humanDecisionSchema>;
 export type FollowUpPlan = z.infer<typeof followUpPlanSchema>;

@@ -6,7 +6,7 @@ Agreement Manager is the source of completed supplier agreements and extracted a
 
 ## IAM Toolkit
 
-IAM Toolkit belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `notice_deadline`, and `has_termination_for_convenience`.
+IAM Toolkit belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `renewal_date`, `notice_period_days`, and `notice_deadline`.
 
 ## MCP
 
@@ -19,4 +19,3 @@ Agreement Manager API is the deterministic application integration surface for a
 ## Workflow Builder
 
 Workflow Builder runs follow-up only after human approval. Example follow-up actions include renewal review, legal review, cancellation notice, amendment workflow, or owner assignment.
-

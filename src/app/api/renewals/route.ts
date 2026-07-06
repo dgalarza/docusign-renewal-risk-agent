@@ -100,4 +100,5 @@ const buildMastraWorkflowErrorResult = ({
   selectedTool: null,
   errors: [error instanceof Error ? error.message : String(error)],
   riskBrief: null,
+  riskReview: null,
 });

@@ -11,8 +11,8 @@ Mapped against the 8-step demo flow in the Notion doc:
 | 1 | Completed agreements centralized in Agreement Manager | ✅ 5 fictional agreements (`examples/agreements/`) with upload-ready PDFs and a classifier fixture |
 | 2 | IAM Toolkit defines custom extraction fields | ✅ Documented (`examples/extraction-fields.md`); sandbox setup is manual and needs verification |
 | 3 | Agreement Manager extracts renewal terms | ⚠️ Depends on sandbox extraction actually populating the custom fields MCP returns |
-| 4 | Intake Agent queries via MCP for renewals in next 90 days | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
-| 5 | Risk Review Agent classifies each agreement against policy | ✅ Wired into `renewalDiscoveryWorkflow` with deterministic `riskBrief` output |
+| 4 | Intake Agent queries via MCP for renewals in the configured review window | ✅ Built and merged — `renewalDiscoveryWorkflow` → Intake Agent → preview table |
+| 5 | Risk Review Agent reviews each agreement against policy | ✅ Workflow-orchestrated: `renewalDiscoveryWorkflow` creates the deterministic `riskBrief`, then invokes the Risk Review Agent for bounded review judgment |
 | 6 | Human reviewer approves the recommended action | ❌ `humanDecisionSchema` exists; no checkpoint, no UI |
 | 7 | Workflow Builder starts follow-up after approval | ❌ `createFollowUpPlan` exists as a pure function; not wired |
 | 8 | Local decision trail recorded | ❌ Schema only |
@@ -28,9 +28,9 @@ The preview UI (`src/app/page.tsx`) shows only the discovery table — no risk c
 
 ## Phase 1 — Carry full extracted fields through discovery
 
-The original blocking schema gap was that `renewalAgreementTableRowSchema` lacked `noticePeriodDays`, `hasTerminationForConvenience`, `terminationFee`, and `agreementStatus` — all of which `classifyRenewalRisk` needs. The row contract now carries those fields, and the remaining risk is live sandbox extraction quality.
+The original blocking schema gap was that `renewalAgreementTableRowSchema` lacked the renewal timing fields the deterministic policy needs, especially `noticePeriodDays`. The row contract now carries those fields, and the remaining risk is live sandbox extraction quality.
 
-- [x] Extend the discovery row schema (or attach a nested `extracted` object) so each row carries every field in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
+- [x] Extend the discovery row schema so each row carries the policy-relevant fields in `supplierRenewalAgreementSchema`, nullable where Docusign may not return them.
 - [x] Update the Intake Agent workflow prompt to request/normalize those fields and list them in `source.missingFields` when absent.
 - [x] Add a row → `SupplierRenewalAgreement` mapper (nulls → the "not extracted" conventions the classifier already handles).
 - [ ] `npm run inspect:mcp discover <date>` and confirm the new fields come back against the sandbox.
@@ -39,9 +39,9 @@ The original blocking schema gap was that `renewalAgreementTableRowSchema` lacke
 
 Keep classification deterministic (defensible in the demo narrative: "policy is code, the agent explains"), and use the agent for rationale.
 
-- [x] Create `riskReviewAgent` (`src/mastra/agents/risk-review-agent.ts`) with the procurement policy from `docs/concept.md` in its instructions. Expose `classifyRenewalRisk` as a Mastra tool (`createTool`) so classifications come from the deterministic policy, and the agent writes the per-agreement rationale and the portfolio-level brief summary.
-- [x] Add a `risk-review` step to `renewalDiscoveryWorkflow` after intake: map rows → agreements → `createRenewalRiskBrief`, then have the agent produce rationale text. Output: `renewalRiskBriefSchema` alongside the discovery rows.
-- [x] Validate agent output against the fixture: run with `asOfDate=2026-07-01` and check the five expected classifications in `examples/agreement-demo-fixture.json` (needs_review / urgent / blocked / needs_review / needs_review).
+- [x] Create `riskReviewAgent` (`src/mastra/agents/risk-review-agent.ts`) with the procurement policy from `docs/concept.md` in its instructions. Expose `classifyRenewalRisk` and `createRenewalRiskBrief` as Mastra tools (`createTool`) so classifications come from the deterministic policy, while the agent prioritizes and explains the human review path.
+- [x] Add a `risk-review` step to `renewalDiscoveryWorkflow` after intake: map rows → agreements, create and validate the deterministic `renewalRiskBriefSchema`, invoke `riskReviewAgent.generate(...)` for a bounded judgment pass, and include structured `riskReview` guidance alongside the discovery rows.
+- [x] Validate agent output against the fixture: run with `asOfDate=2026-07-01` and check the five expected classifications in `examples/agreement-demo-fixture.json` (needs_review / urgent / blocked / standard / needs_review).
 - [x] Register the agent in `src/mastra/index.ts`.
 
 ## Phase 3 — Human approval checkpoint

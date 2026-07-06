@@ -4,10 +4,14 @@ import { z } from 'zod';
 import {
   renewalAgreementTableRowSchema,
   renewalDiscoveryResultSchema,
+  renewalRiskAgentJudgmentSchema,
   renewalReviewWorkflowResultSchema,
   supplierRenewalAgreementSchema,
   type RenewalAgreementTableRow,
   type RenewalDiscoveryResult,
+  type RenewalRiskBrief,
+  type RenewalRiskAgentJudgment,
+  type RenewalRiskFinding,
   type RenewalReviewWorkflowResult,
   type SupplierRenewalAgreement,
 } from '../domain/schemas';
@@ -18,10 +22,19 @@ import {
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
 const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', import.meta.url);
+const RISK_REVIEW_AGENT_TIMEOUT_MS = 5_000;
+const RISK_REVIEW_AGENT_FINDING_LIMIT = 3;
 
 export type RenewalDiscoveryProgress = {
   type: 'renewal-progress';
-  kind: 'intake' | 'tool-call' | 'tool-result' | 'normalize' | 'risk-review';
+  kind:
+    | 'intake'
+    | 'tool-call'
+    | 'tool-result'
+    | 'normalize'
+    | 'risk-review'
+    | 'policy-tool-call'
+    | 'policy-tool-result';
   label: string;
   detail: string | null;
 };
@@ -38,7 +51,7 @@ export const renewalDiscoveryWorkflowInputSchema = z.object({
 const intakeAgentFindRenewalsStep = createStep({
   id: 'intake-agent-find-renewals',
   description:
-    'Intake Agent queries Agreement Manager through Docusign MCP/API for supplier agreements renewing in the next 90 days.',
+    'Intake Agent queries Agreement Manager through Docusign MCP/API for supplier agreements renewing in the configured review window.',
   inputSchema: renewalDiscoveryWorkflowInputSchema,
   outputSchema: renewalDiscoveryResultSchema,
   execute: async ({ inputData, runId, mastra, writer }) => {
@@ -87,6 +100,7 @@ const intakeAgentFindRenewalsStep = createStep({
       buildIntakeAgentRenewalPrompt({
         request: inputData.request,
         asOfDate,
+        accountId: process.env.DOCUSIGN_ACCOUNT_ID,
         reviewWindowDays: inputData.reviewWindowDays,
       }),
       {
@@ -134,16 +148,12 @@ const riskReviewStep = createStep({
     'Risk Review Agent maps discovered rows into policy-ready agreements and creates a deterministic renewal risk brief.',
   inputSchema: renewalDiscoveryResultSchema,
   outputSchema: renewalReviewWorkflowResultSchema,
-  execute: async ({ inputData, mastra, writer }) => {
+  execute: async ({ inputData, runId, mastra, writer }) => {
     const emitProgress = (progress: Omit<RenewalDiscoveryProgress, 'type'>) => {
       void writer
         .write({ type: 'renewal-progress', ...progress } satisfies RenewalDiscoveryProgress)
         .catch(() => {});
     };
-
-    if (mastra) {
-      mastra.getAgent('riskReviewAgent');
-    }
 
     emitProgress({
       kind: 'risk-review',
@@ -152,13 +162,61 @@ const riskReviewStep = createStep({
     });
 
     const agreements = mapRenewalRowsToAgreements(inputData.rows);
-    const riskBrief =
-      agreements.length > 0
-        ? createRenewalRiskBrief(agreements, {
-            asOfDate: inputData.asOfDate,
-            reviewWindowDays: inputData.reviewWindowDays,
-          })
-        : null;
+    let riskBrief: RenewalReviewWorkflowResult['riskBrief'] = null;
+    let riskReview: RenewalRiskAgentJudgment | null = null;
+
+    if (agreements.length > 0) {
+      emitProgress({
+        kind: 'risk-review',
+        label: 'Risk Review Agent reviewing policy-ready agreements',
+        detail: `${agreements.length} ${agreements.length === 1 ? 'agreement' : 'agreements'} mapped from discovery rows`,
+      });
+
+      emitProgress({
+        kind: 'policy-tool-call',
+        label: 'Creating deterministic policy brief',
+        detail: 'Deterministic renewal policy classifying agreements',
+      });
+
+      riskBrief = createRenewalRiskBrief(agreements, {
+        asOfDate: inputData.asOfDate,
+        reviewWindowDays: inputData.reviewWindowDays,
+      });
+
+      emitProgress({
+        kind: 'policy-tool-result',
+        label: 'Deterministic policy brief created',
+        detail: null,
+      });
+
+      riskReview = createRiskReviewJudgment(riskBrief);
+
+      if (mastra) {
+        const riskReviewAgent = mastra.getAgent('riskReviewAgent');
+
+        emitProgress({
+          kind: 'risk-review',
+          label: 'Risk Review Agent applying judgment',
+          detail: 'Prioritizing the policy brief for human review',
+        });
+
+        riskReview =
+          (await generateRiskReviewAgentJudgment({
+          riskReviewAgent,
+          riskBrief,
+          fallbackJudgment: riskReview,
+          runId: `workflow-${runId}-risk-review`,
+        }).catch(error => {
+            emitProgress({
+              kind: 'risk-review',
+              label: 'Risk Review Agent judgment fallback',
+              detail: error instanceof Error ? error.message : String(error),
+            });
+
+            return null;
+          })) ?? riskReview;
+      }
+    }
 
     const result = renewalReviewWorkflowResultSchema.parse({
       ...inputData,
@@ -166,6 +224,7 @@ const riskReviewStep = createStep({
         ? `${inputData.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
         : `${inputData.message} Risk review found no agreements to classify.`,
       riskBrief,
+      riskReview,
     });
 
     emitProgress({
@@ -190,21 +249,211 @@ const describeToolArgs = (args: unknown): string | null => {
   return typeof reviewStatus === 'string' ? `Review status ${reviewStatus}` : null;
 };
 
+const generateRiskReviewAgentJudgment = async ({
+  riskReviewAgent,
+  riskBrief,
+  fallbackJudgment,
+  runId,
+}: {
+  riskReviewAgent: {
+    generate: (
+      prompt: string,
+      options: {
+        maxSteps: number;
+        runId: string;
+        toolChoice: 'none';
+        structuredOutput: { schema: typeof renewalRiskAgentJudgmentSchema };
+        abortSignal: AbortSignal;
+        modelSettings: {
+          temperature: number;
+          maxOutputTokens: number;
+          reasoning: 'low';
+        };
+      },
+    ) => Promise<{ object?: unknown }>;
+  };
+  riskBrief: RenewalRiskBrief;
+  fallbackJudgment: RenewalRiskAgentJudgment;
+  runId: string;
+}): Promise<RenewalRiskAgentJudgment> => {
+  const abortController = new AbortController();
+  const timeout = setTimeout(
+    () => abortController.abort('Risk Review Agent judgment timed out.'),
+    RISK_REVIEW_AGENT_TIMEOUT_MS,
+  );
+
+  try {
+    const agentResult = await riskReviewAgent.generate(
+      buildRiskReviewAgentJudgmentPrompt({ riskBrief, fallbackJudgment }),
+      {
+        maxSteps: 1,
+        runId,
+        toolChoice: 'none',
+        structuredOutput: { schema: renewalRiskAgentJudgmentSchema },
+        abortSignal: abortController.signal,
+        modelSettings: {
+          temperature: 0,
+          maxOutputTokens: 450,
+          reasoning: 'low',
+        },
+      },
+    );
+
+    return renewalRiskAgentJudgmentSchema.parse(agentResult.object);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const buildRiskReviewAgentJudgmentPrompt = ({
+  riskBrief,
+  fallbackJudgment,
+}: {
+  riskBrief: RenewalRiskBrief;
+  fallbackJudgment: RenewalRiskAgentJudgment;
+}) =>
+  `You are the Risk Review Agent. The deterministic policy tool already produced this canonical renewal risk brief.
+
+Do not change classifications, recommended actions, deadline math, or extracted signals.
+Apply judgment only to the top ${RISK_REVIEW_AGENT_FINDING_LIMIT} policy findings below:
+- portfolioJudgment: one concise sentence naming what needs attention.
+- priorityAgreementIds: include only the top agreement IDs, ordered by review priority.
+- reviewerGuidance: include only the top findings that need human attention.
+
+Return only the requested RenewalRiskAgentJudgment structure.
+
+Portfolio summary:
+${JSON.stringify(
+  {
+    agreementsReviewed: riskBrief.agreementsReviewed,
+    reviewWindowDays: riskBrief.reviewWindowDays,
+    fallbackPortfolioJudgment: fallbackJudgment.portfolioJudgment,
+    topFindings: fallbackJudgment.priorityAgreementIds
+      .slice(0, RISK_REVIEW_AGENT_FINDING_LIMIT)
+      .map(agreementId =>
+        riskBrief.findings.find(finding => finding.agreementId === agreementId),
+      )
+      .filter(Boolean),
+  },
+  null,
+  2,
+)}`;
+
+const createRiskReviewJudgment = (
+  riskBrief: RenewalRiskBrief,
+): RenewalRiskAgentJudgment => {
+  const rankedFindings = [...riskBrief.findings].sort((left, right) =>
+    compareFindingsByReviewPriority(left, right, riskBrief.reviewWindowDays),
+  );
+  const urgentOrBlocked = rankedFindings.filter(
+    finding => finding.classification === 'urgent' || finding.classification === 'blocked',
+  ).length;
+  const legalReviews = rankedFindings.filter(
+    finding => finding.recommendedAction === 'legal_review',
+  ).length;
+
+  return {
+    portfolioJudgment:
+      riskBrief.agreementsReviewed === 0
+        ? 'No agreements need renewal-risk review in this window.'
+        : `${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'needs' : 'need'} review; ${urgentOrBlocked} ${urgentOrBlocked === 1 ? 'is' : 'are'} urgent or blocked, and ${legalReviews} ${legalReviews === 1 ? 'needs' : 'need'} legal attention.`,
+    priorityAgreementIds: rankedFindings.map(finding => finding.agreementId),
+    reviewerGuidance: rankedFindings.map(finding => ({
+      agreementId: finding.agreementId,
+      judgment: buildFindingJudgment(finding),
+      reasonForPriority: finding.rationale,
+      suggestedReviewer: getSuggestedReviewer(finding),
+    })),
+  };
+};
+
+const compareFindingsByReviewPriority = (
+  left: RenewalRiskFinding,
+  right: RenewalRiskFinding,
+  reviewWindowDays: number,
+) =>
+  getFindingPriority(right, reviewWindowDays) -
+  getFindingPriority(left, reviewWindowDays);
+
+const getFindingPriority = (
+  finding: RenewalRiskFinding,
+  reviewWindowDays: number,
+) => {
+  const severityScore = {
+    standard: 0,
+    needs_review: 10,
+    urgent: 20,
+    blocked: 30,
+  }[finding.classification];
+  const legalScore = finding.recommendedAction === 'legal_review' ? 2 : 0;
+  const deadlineScore =
+    finding.daysUntilNoticeDeadline !== null
+      ? Math.max(0, reviewWindowDays - finding.daysUntilNoticeDeadline) /
+        reviewWindowDays
+      : 0;
+
+  return severityScore + legalScore + deadlineScore;
+};
+
+const buildFindingJudgment = (finding: RenewalRiskFinding) => {
+  if (finding.classification === 'blocked') {
+    return `${finding.supplierName} should be escalated first because the notice window has already closed.`;
+  }
+
+  if (finding.classification === 'urgent') {
+    return `${finding.supplierName} needs owner confirmation before the notice window closes.`;
+  }
+
+  if (finding.recommendedAction === 'legal_review') {
+    return `${finding.supplierName} should go to legal because the extracted renewal terms are not safe to accept as-is.`;
+  }
+
+  if (finding.classification === 'needs_review') {
+    return `${finding.supplierName} needs procurement review before renewal intent is accepted.`;
+  }
+
+  return `${finding.supplierName} can stay on the watchlist because no high-risk renewal signal was found.`;
+};
+
+const getSuggestedReviewer = (
+  finding: RenewalRiskFinding,
+): RenewalRiskAgentJudgment['reviewerGuidance'][number]['suggestedReviewer'] => {
+  if (finding.classification === 'blocked') {
+    return 'executive_escalation';
+  }
+
+  if (finding.recommendedAction === 'legal_review') {
+    return 'legal';
+  }
+
+  if (finding.recommendedAction === 'no_action') {
+    return 'none';
+  }
+
+  return 'procurement_owner';
+};
+
 const buildIntakeAgentRenewalPrompt = (input: {
   request: string;
   asOfDate: string;
+  accountId?: string;
   reviewWindowDays: number;
-}) => `Request: ${input.request}
+}) => {
+  const discoverySteps = input.accountId
+    ? `1. Use accountId "${input.accountId}". Do not call docusign_getUserInfo.
+2. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
+   { "accountId": "${input.accountId}", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }`
+    : `1. Call docusign_getUserInfo.
+2. Use the default account_id from that response.
+3. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
+   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }`;
+
+  return `Request: ${input.request}
 
 Use Docusign MCP to find completed supplier agreements for renewal review.
 
 Steps:
-1. Call docusign_getUserInfo.
-2. Use the default account_id from that response.
-3. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
-   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "COMPLETE" }
-4. Call ${DOCUSIGN_AGREEMENT_TOOL} again with:
-   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }
+${discoverySteps}
 
 Return one RenewalDiscoveryResult JSON object:
 - sourceLabel must be "Docusign MCP".
@@ -214,18 +463,18 @@ Return one RenewalDiscoveryResult JSON object:
 - availableTools can be an empty array.
 - rows must use source.system "docusign_mcp" and source.toolName "${DOCUSIGN_AGREEMENT_TOOL}".
 - Include rows with renewalDate from ${input.asOfDate} through the next ${input.reviewWindowDays} days.
-- Include agreementStatus, noticePeriodDays, hasTerminationForConvenience, and terminationFee when Docusign returns them.
+- Include noticePeriodDays when Docusign returns it.
 - If Docusign returns renewalDate and noticePeriodDays but not noticeDeadline, calculate noticeDeadline as renewalDate minus noticePeriodDays.
 - If noticeDeadline is available, calculate daysUntilNoticeDeadline from noticeDeadline and ${input.asOfDate}.
 - If Docusign does not return renewalDate, keep the row so the preview can show missing renewal fields.
-- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, agreementValue, agreementStatus, and hasTerminationForConvenience when Docusign did not return them.
-- Use "Not extracted" for supplier, agreementTitle, or terminationFee when Docusign did not return them.
-- Use "Unassigned" for businessOwner when Docusign did not return owner metadata. Missing businessOwner should not make a row incomplete.
+- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, and agreementValue when Docusign did not return them.
+- Use "Not extracted" for supplier or agreementTitle when Docusign did not return them.
 - Use renewalType "not_extracted" unless Docusign returns an explicit renewal type.
-- source.missingFields must list each missing required table field: supplier, agreementTitle, agreementStatus, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType, hasTerminationForConvenience, terminationFee.
+- source.missingFields must list each missing required table field: supplier, agreementTitle, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType.
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 
 Do not add OData filters or renewal-date filters. Do not invent fields that Docusign did not return.`;
+};
 
 export const renewalDiscoveryWorkflow = createWorkflow({
   id: 'renewal-discovery-workflow',
@@ -258,6 +507,7 @@ export const runRenewalDiscoveryWorkflow = async (
       selectedTool: null,
       errors: ['error' in workflowResult ? [workflowResult.error.message].filter(Boolean).join(': ') : workflowResult.status],
       riskBrief: null,
+      riskReview: null,
     };
   }
 
@@ -292,6 +542,7 @@ export const runRenewalFixtureReview = async (
       ? `${discoveryResult.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
       : `${discoveryResult.message} Risk review found no agreements to classify.`,
     riskBrief,
+    riskReview: null,
   });
 };
 
@@ -333,7 +584,6 @@ const mapFixtureAgreementToRow = (
     agreementId: agreement.agreementId,
     supplier: agreement.supplierName,
     agreementTitle: agreement.agreementTitle,
-    agreementStatus: agreement.agreementStatus,
     renewalDate: agreement.renewalDate,
     noticePeriodDays: agreement.noticePeriodDays,
     noticeDeadline: agreement.noticeDeadline,
@@ -343,9 +593,6 @@ const mapFixtureAgreementToRow = (
     agreementValue: agreement.agreementValue,
     currency: agreement.currency,
     renewalType: agreement.renewalType,
-    hasTerminationForConvenience: agreement.hasTerminationForConvenience,
-    terminationFee: agreement.terminationFee,
-    businessOwner: agreement.businessOwner,
     source: {
       system: 'fixture',
       recordId: agreement.agreementId,

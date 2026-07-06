@@ -13,25 +13,20 @@
         "agreementId": "demo-brightline-001",
         "supplierName": "Brightline Office Supplies LLC",
         "agreementTitle": "Workplace Supplies Subscription Agreement",
-        "agreementStatus": "completed",
         "agreementValue": 82000,
         "currency": "USD",
         "renewalType": "auto_renews",
         "renewalDate": "2026-10-15",
         "noticePeriodDays": 60,
-        "noticeDeadline": "2026-08-16",
-        "hasTerminationForConvenience": false,
-        "terminationFee": "Termination for convenience is not available",
-        "businessOwner": "Procurement Ops"
+        "noticeDeadline": "2026-08-16"
       },
       "expectedFinding": {
         "classification": "needs_review",
-        "recommendedAction": "legal_review",
+        "recommendedAction": "owner_review",
         "daysUntilNoticeDeadline": 46,
         "keyExtractionSignals": [
           "Agreement auto-renews.",
-          "Agreement value is at or above 50000 USD.",
-          "Termination for convenience was not extracted."
+          "Agreement value is at or above 50000 USD."
         ]
       }
     },
@@ -42,16 +37,12 @@
         "agreementId": "demo-meridian-002",
         "supplierName": "Meridian Catering Services Inc.",
         "agreementTitle": "Event Catering Services Agreement",
-        "agreementStatus": "completed",
         "agreementValue": 42000,
         "currency": "USD",
         "renewalType": "auto_renews",
         "renewalDate": "2026-08-19",
         "noticePeriodDays": 30,
-        "noticeDeadline": "2026-07-20",
-        "hasTerminationForConvenience": true,
-        "terminationFee": "None after current term",
-        "businessOwner": "Workplace Experience"
+        "noticeDeadline": "2026-07-20"
       },
       "expectedFinding": {
         "classification": "urgent",
@@ -70,16 +61,12 @@
         "agreementId": "demo-northstar-003",
         "supplierName": "Northstar Maintenance Group LLC",
         "agreementTitle": "Facilities Maintenance Agreement",
-        "agreementStatus": "completed",
         "agreementValue": 48000,
         "currency": "USD",
         "renewalType": "auto_renews",
         "renewalDate": "2026-07-20",
         "noticePeriodDays": 45,
-        "noticeDeadline": "2026-06-05",
-        "hasTerminationForConvenience": true,
-        "terminationFee": "None after renewed term begins",
-        "businessOwner": "Facilities"
+        "noticeDeadline": "2026-06-05"
       },
       "expectedFinding": {
         "classification": "blocked",
@@ -93,29 +80,24 @@
     },
     {
       "file": "examples/agreements/atlas-calibration-labs.md",
-      "scenario": "No termination-for-convenience language for high-value renewal",
+      "scenario": "High-value manual renewal with complete notice terms",
       "agreement": {
         "agreementId": "demo-atlas-004",
         "supplierName": "Atlas Calibration Labs Inc.",
         "agreementTitle": "Equipment Calibration Services Agreement",
-        "agreementStatus": "completed",
         "agreementValue": 96000,
         "currency": "USD",
         "renewalType": "manual_renewal",
         "renewalDate": "2026-09-30",
         "noticePeriodDays": 45,
-        "noticeDeadline": "2026-08-16",
-        "hasTerminationForConvenience": false,
-        "terminationFee": "None for uncured breach; termination for convenience is not available",
-        "businessOwner": "Quality"
+        "noticeDeadline": "2026-08-16"
       },
       "expectedFinding": {
-        "classification": "needs_review",
-        "recommendedAction": "legal_review",
+        "classification": "standard",
+        "recommendedAction": "no_action",
         "daysUntilNoticeDeadline": 46,
         "keyExtractionSignals": [
-          "Agreement value is at or above 50000 USD.",
-          "Termination for convenience was not extracted."
+          "Agreement value is at or above 50000 USD."
         ]
       }
     },
@@ -126,16 +108,12 @@
         "agreementId": "demo-clearview-005",
         "supplierName": "Clearview Inventory Platform LLC",
         "agreementTitle": "Inventory Analytics Subscription Agreement",
-        "agreementStatus": "completed",
         "agreementValue": 64000,
         "currency": "USD",
         "renewalType": "auto_renews",
         "renewalDate": null,
         "noticePeriodDays": null,
-        "noticeDeadline": null,
-        "hasTerminationForConvenience": null,
-        "terminationFee": "Not extracted",
-        "businessOwner": "Supply Chain"
+        "noticeDeadline": null
       },
       "expectedFinding": {
         "classification": "needs_review",

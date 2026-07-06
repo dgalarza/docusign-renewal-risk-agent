@@ -38,7 +38,6 @@ const completeAutoRenewalRow = renewalAgreementTableRowSchema.parse({
   agreementId: 'row-derived-deadline',
   supplier: 'Derived Deadline Supplier',
   agreementTitle: 'Derived Deadline Agreement',
-  agreementStatus: 'completed',
   renewalDate: '2026-09-29',
   noticePeriodDays: 60,
   noticeDeadline: null,
@@ -46,9 +45,6 @@ const completeAutoRenewalRow = renewalAgreementTableRowSchema.parse({
   agreementValue: 25_000,
   currency: 'USD',
   renewalType: 'auto_renews',
-  hasTerminationForConvenience: true,
-  terminationFee: 'None after current term',
-  businessOwner: 'Procurement Ops',
   source: {
     system: 'docusign_mcp',
     toolName: 'docusign_getAllAgreements',
@@ -100,7 +96,7 @@ test('creates a fixture-backed risk brief', () => {
   assert.equal(fixtureBrief.agreementsReviewed, 5);
   assert.deepEqual(
     fixtureBrief.findings.map(finding => finding.classification),
-    ['needs_review', 'urgent', 'blocked', 'needs_review', 'needs_review'],
+    ['needs_review', 'urgent', 'blocked', 'standard', 'needs_review'],
   );
 });
 
@@ -109,6 +105,26 @@ test('maps discovery rows and derives missing notice deadlines', () => {
 
   assert.equal(mappedAgreement.noticeDeadline, '2026-07-31');
   assert.equal(classifyRenewalRisk(mappedAgreement, fixture.metadata.asOfDate).classification, 'urgent');
+});
+
+test('treats invalid extracted dates as missing policy inputs', () => {
+  const invalidDateRow = renewalAgreementTableRowSchema.parse({
+    ...completeAutoRenewalRow,
+    agreementId: 'row-invalid-dates',
+    renewalDate: 'Not extracted',
+    noticeDeadline: 'Pending extraction',
+    source: {
+      ...completeAutoRenewalRow.source,
+      recordId: 'row-invalid-dates',
+      missingFields: ['renewalDate', 'noticeDeadline'],
+    },
+  });
+
+  const mappedAgreement = mapRenewalRowToAgreement(invalidDateRow);
+  const finding = classifyRenewalRisk(mappedAgreement, fixture.metadata.asOfDate);
+
+  assert.equal(finding.daysUntilNoticeDeadline, null);
+  assert.equal(finding.classification, 'needs_review');
 });
 
 test('routes missing agreement value to review when renewal risk is present', () => {
@@ -134,61 +150,31 @@ test('routes missing agreement value to review when renewal risk is present', ()
   assert.ok(finding.extractedSignals.includes('Agreement value was not extracted.'));
 });
 
-test('routes missing notice and termination terms to legal review', () => {
-  const missingNoticeAndTerminationRow = renewalAgreementTableRowSchema.parse({
+test('routes missing notice terms to legal review', () => {
+  const missingNoticeRow = renewalAgreementTableRowSchema.parse({
     ...completeAutoRenewalRow,
-    agreementId: 'row-missing-notice-and-termination',
+    agreementId: 'row-missing-notice',
     agreementValue: 75_000,
     renewalDate: null,
     noticePeriodDays: null,
     noticeDeadline: null,
-    hasTerminationForConvenience: null,
-    terminationFee: 'Not extracted',
     source: {
       ...completeAutoRenewalRow.source,
-      recordId: 'row-missing-notice-and-termination',
+      recordId: 'row-missing-notice',
       missingFields: [
         'renewalDate',
         'noticePeriodDays',
         'noticeDeadline',
-        'hasTerminationForConvenience',
-        'terminationFee',
       ],
     },
   });
 
   const finding = classifyRenewalRisk(
-    mapRenewalRowToAgreement(missingNoticeAndTerminationRow),
+    mapRenewalRowToAgreement(missingNoticeRow),
     fixture.metadata.asOfDate,
   );
 
   assert.equal(finding.classification, 'needs_review');
   assert.equal(finding.recommendedAction, 'legal_review');
   assert.ok(finding.extractedSignals.includes('Renewal notice terms were not extracted.'));
-});
-
-test('routes missing termination-for-convenience to legal review', () => {
-  const noTerminationForConvenienceRow = renewalAgreementTableRowSchema.parse({
-    ...completeAutoRenewalRow,
-    agreementId: 'row-no-termination-for-convenience',
-    agreementValue: 12_000,
-    renewalDate: '2026-10-01',
-    noticePeriodDays: 60,
-    noticeDeadline: '2026-08-02',
-    hasTerminationForConvenience: false,
-    source: {
-      ...completeAutoRenewalRow.source,
-      recordId: 'row-no-termination-for-convenience',
-      missingFields: [],
-    },
-  });
-
-  const finding = classifyRenewalRisk(
-    mapRenewalRowToAgreement(noTerminationForConvenienceRow),
-    fixture.metadata.asOfDate,
-  );
-
-  assert.equal(finding.classification, 'needs_review');
-  assert.equal(finding.recommendedAction, 'legal_review');
-  assert.ok(finding.extractedSignals.includes('Termination for convenience was not extracted.'));
 });
