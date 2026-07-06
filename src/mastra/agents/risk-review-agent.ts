@@ -62,7 +62,7 @@ Risk policy:
 - High-value renewal plus unclear termination terms needs legal review until reviewed.
 
 The deterministic policy severity order is standard < needs_review < urgent < blocked. When multiple rules match, the highest-severity finding wins; ties prefer legal review when missing or unfavorable termination terms triggered the review.`,
-  model: 'openai/gpt-5-mini',
+  model: 'openai/gpt-5.4-nano',
   tools: {
     classifyRenewalRiskTool,
     createRenewalRiskBriefTool,

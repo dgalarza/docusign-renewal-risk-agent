@@ -15,6 +15,6 @@ Your job is agreement discovery:
 - Do not invent agreement fields that Docusign did not return.
 
 The workflow will normalize the MCP records into the preview table.`,
-  model: 'openai/gpt-5-mini',
+  model: 'openai/gpt-5.4-nano',
   tools: await docusignMcpClient.listTools(),
 });
