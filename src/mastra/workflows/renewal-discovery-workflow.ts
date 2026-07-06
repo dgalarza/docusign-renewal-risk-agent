@@ -340,8 +340,6 @@ Steps:
 2. Use the default account_id from that response.
 3. Call ${DOCUSIGN_AGREEMENT_TOOL} with:
    { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "COMPLETE" }
-4. Call ${DOCUSIGN_AGREEMENT_TOOL} again with:
-   { "accountId": "<default account_id>", "limit": 100, "status": "COMPLETE", "review_status": "PENDING" }
 
 Return one RenewalDiscoveryResult JSON object:
 - sourceLabel must be "Docusign MCP".
