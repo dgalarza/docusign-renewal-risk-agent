@@ -22,7 +22,8 @@ import {
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
 const FIXTURE_PATH = new URL('../../../examples/agreement-demo-fixture.json', import.meta.url);
-const RISK_REVIEW_AGENT_TIMEOUT_MS = 8_000;
+const RISK_REVIEW_AGENT_TIMEOUT_MS = 5_000;
+const RISK_REVIEW_AGENT_FINDING_LIMIT = 3;
 
 export type RenewalDiscoveryProgress = {
   type: 'renewal-progress';
@@ -200,10 +201,11 @@ const riskReviewStep = createStep({
 
         riskReview =
           (await generateRiskReviewAgentJudgment({
-            riskReviewAgent,
-            riskBrief,
-            runId: `workflow-${runId}-risk-review`,
-          }).catch(error => {
+          riskReviewAgent,
+          riskBrief,
+          fallbackJudgment: riskReview,
+          runId: `workflow-${runId}-risk-review`,
+        }).catch(error => {
             emitProgress({
               kind: 'risk-review',
               label: 'Risk Review Agent judgment fallback',
@@ -249,6 +251,7 @@ const describeToolArgs = (args: unknown): string | null => {
 const generateRiskReviewAgentJudgment = async ({
   riskReviewAgent,
   riskBrief,
+  fallbackJudgment,
   runId,
 }: {
   riskReviewAgent: {
@@ -269,6 +272,7 @@ const generateRiskReviewAgentJudgment = async ({
     ) => Promise<{ object?: unknown }>;
   };
   riskBrief: RenewalRiskBrief;
+  fallbackJudgment: RenewalRiskAgentJudgment;
   runId: string;
 }): Promise<RenewalRiskAgentJudgment> => {
   const abortController = new AbortController();
@@ -279,7 +283,7 @@ const generateRiskReviewAgentJudgment = async ({
 
   try {
     const agentResult = await riskReviewAgent.generate(
-      buildRiskReviewAgentJudgmentPrompt(riskBrief),
+      buildRiskReviewAgentJudgmentPrompt({ riskBrief, fallbackJudgment }),
       {
         maxSteps: 1,
         runId,
@@ -288,7 +292,7 @@ const generateRiskReviewAgentJudgment = async ({
         abortSignal: abortController.signal,
         modelSettings: {
           temperature: 0,
-          maxOutputTokens: 700,
+          maxOutputTokens: 450,
           reasoning: 'low',
         },
       },
@@ -300,19 +304,39 @@ const generateRiskReviewAgentJudgment = async ({
   }
 };
 
-const buildRiskReviewAgentJudgmentPrompt = (riskBrief: RenewalRiskBrief) =>
+const buildRiskReviewAgentJudgmentPrompt = ({
+  riskBrief,
+  fallbackJudgment,
+}: {
+  riskBrief: RenewalRiskBrief;
+  fallbackJudgment: RenewalRiskAgentJudgment;
+}) =>
   `You are the Risk Review Agent. The deterministic policy tool already produced this canonical renewal risk brief.
 
 Do not change classifications, recommended actions, deadline math, or extracted signals.
-Apply judgment for the human reviewer:
+Apply judgment only to the top ${RISK_REVIEW_AGENT_FINDING_LIMIT} policy findings below:
 - portfolioJudgment: one concise sentence naming what needs attention.
-- priorityAgreementIds: agreement IDs ordered by review priority.
-- reviewerGuidance: one entry per finding with practical judgment, reasonForPriority, and suggestedReviewer.
+- priorityAgreementIds: include only the top agreement IDs, ordered by review priority.
+- reviewerGuidance: include only the top findings that need human attention.
 
 Return only the requested RenewalRiskAgentJudgment structure.
 
-Policy brief:
-${JSON.stringify(riskBrief, null, 2)}`;
+Portfolio summary:
+${JSON.stringify(
+  {
+    agreementsReviewed: riskBrief.agreementsReviewed,
+    reviewWindowDays: riskBrief.reviewWindowDays,
+    fallbackPortfolioJudgment: fallbackJudgment.portfolioJudgment,
+    topFindings: fallbackJudgment.priorityAgreementIds
+      .slice(0, RISK_REVIEW_AGENT_FINDING_LIMIT)
+      .map(agreementId =>
+        riskBrief.findings.find(finding => finding.agreementId === agreementId),
+      )
+      .filter(Boolean),
+  },
+  null,
+  2,
+)}`;
 
 const createRiskReviewJudgment = (
   riskBrief: RenewalRiskBrief,

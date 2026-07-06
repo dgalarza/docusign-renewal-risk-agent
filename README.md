@@ -87,12 +87,13 @@ IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
 2. Run `npm run auth:docusign` to complete the Docusign OAuth flow and paste the
    returned token values into `.env`.
 3. Run `npm run inspect:mcp` to verify MCP tool discovery.
-4. Run `npm run inspect:mcp discover 2026-07-05 90` to run the workflow. The
+4. Run `npm run inspect:mcp discover 2026-07-05 45` to run the workflow. The
    workflow invokes the Intake Agent, which receives Docusign MCP tools through
    Mastra `MCPClient.listTools()` and calls Agreement Manager before rows are
    normalized for the preview table. The workflow then creates a deterministic
    renewal-risk policy brief and invokes the Risk Review Agent to add
-   reviewer-facing judgment without changing policy classifications.
+   reviewer-facing judgment for the top findings without changing policy
+   classifications.
 5. Run `npm run dev` to start the Mastra API and Studio on
    `http://127.0.0.1:4111/`.
 6. Run `npm run preview:app` and open `http://localhost:4173/`.
@@ -115,7 +116,7 @@ discovery executes:
    individual MCP calls surface as `workflow-step-output` chunks.
 4. The risk-review step maps discovery rows into policy-ready agreements,
    creates the deterministic `riskBrief`, and invokes the Risk Review Agent for
-   a bounded, validated `riskReview` judgment layer for human prioritization.
+   a bounded, validated `riskReview` judgment layer over the top findings.
 5. The route translates chunks into `progress` server-sent events and closes
    with a final `result` (or `failure`) event.
 
