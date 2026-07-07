@@ -1,31 +1,19 @@
 'use client';
 
-import {
-  ArrowRight,
-  Check,
-  FileCheck,
-  Gavel,
-  Loader2,
-  Search,
-  Sparkles,
-  UserCheck,
-  Workflow,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import type { LedgerEntry } from '@/components/run-ledger';
 import { cn } from '@/lib/utils';
 
 export type PipelinePhase = 'idle' | 'running' | 'complete' | 'failed';
 
-type StageKind = 'deterministic' | 'agent' | 'system' | 'human';
-
 type StageState = 'planned' | 'active' | 'done' | 'failed';
 
 type Stage = {
-  icon: LucideIcon;
   title: string;
   actor: string;
   description: string;
-  kind: StageKind;
+  detailKinds: string[];
 };
 
 /**
@@ -35,72 +23,79 @@ type Stage = {
  */
 const STAGES: Stage[] = [
   {
-    icon: Workflow,
     title: 'Workflow',
     actor: 'Mastra orchestration',
     description: 'Dispatches the run and sequences each agent.',
-    kind: 'system',
+    detailKinds: ['run-open', 'dispatch'],
   },
   {
-    icon: Search,
     title: 'Intake Agent',
     actor: 'Docusign MCP',
     description: 'Discovers completed agreements in Agreement Manager and normalizes the fields.',
-    kind: 'agent',
+    detailKinds: ['intake', 'tool-call', 'tool-result', 'normalize'],
   },
   {
-    icon: Gavel,
     title: 'Risk review',
     actor: 'Policy tool + Risk Review Agent',
     description: 'Deterministic policy classifies every agreement; the agent adds bounded judgment.',
-    kind: 'deterministic',
+    detailKinds: ['risk-review', 'policy-tool-call', 'policy-tool-result'],
   },
   {
-    icon: FileCheck,
     title: 'Risk brief',
     actor: 'Ranked findings',
     description: 'Prioritized findings, recommended actions, and suggested reviewers.',
-    kind: 'system',
+    detailKinds: ['run-close', 'error'],
   },
 ];
 
 const NEXT_STAGE: Stage = {
-  icon: UserCheck,
   title: 'Human review',
   actor: 'Workflow Builder',
   description: 'A reviewer approves or edits, then routes follow-up. Next story.',
-  kind: 'human',
+  detailKinds: ['human-approval', 'workflow-builder'],
 };
 
 export function PipelineOverview({
   phase,
   activeStage,
+  entries,
 }: {
   phase: PipelinePhase;
   activeStage: number;
+  entries: LedgerEntry[];
 }) {
+  const stages = [...STAGES, NEXT_STAGE];
+
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <section>
+      <div className="flex flex-col gap-3">
         <div className="min-w-0">
-          <p className="font-data text-[11px] font-medium uppercase tracking-[0.16em] text-accent-foreground">
+          <p className="font-data text-xs font-semibold uppercase tracking-[0.2em] text-primary">
             Multi-agent orchestration
           </p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
+          <p className="mt-3 text-base leading-7 text-muted-foreground">
             One workflow, two agents, and a deterministic policy tool that stays the source of truth.
           </p>
         </div>
-        <Legend />
       </div>
 
-      <div className="flex flex-col gap-2 px-4 py-4 lg:flex-row lg:items-stretch lg:gap-0">
-        {STAGES.map((stage, index) => (
-          <div key={stage.title} className="contents">
-            <StageCard stage={stage} state={stageState(index, phase, activeStage)} />
-            <Connector />
-          </div>
-        ))}
-        <StageCard stage={NEXT_STAGE} state="planned" upcoming />
+      <div className="mt-5">
+        <div className="grid gap-3">
+          {stages.map((stage, index) => (
+            <StageRow
+              key={stage.title}
+              stage={stage}
+              state={
+                index < STAGES.length
+                  ? stageState(index, phase, activeStage)
+                  : 'planned'
+              }
+              upcoming={index === STAGES.length}
+              entries={entries.filter(entry => stage.detailKinds.includes(entry.kind))}
+              hasConnector={index < stages.length - 1}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -130,156 +125,153 @@ function stageState(
   return 'planned';
 }
 
-function StageCard({
+function StageRow({
   stage,
   state,
-  upcoming = false,
+  upcoming,
+  entries,
+  hasConnector,
 }: {
   stage: Stage;
   state: StageState;
-  upcoming?: boolean;
+  upcoming: boolean;
+  entries: LedgerEntry[];
+  hasConnector: boolean;
 }) {
-  const Icon = stage.icon;
-
   return (
-    <div
-      className={cn(
-        'relative flex flex-1 flex-col gap-2 rounded-md border px-3 py-3 transition-colors',
-        upcoming
-          ? 'border-dashed bg-transparent'
-          : state === 'active'
-            ? 'border-primary/40 bg-accent'
-            : state === 'done'
-              ? 'border-live/30 bg-live-wash/50'
-              : state === 'failed'
-                ? 'border-urgent/40 bg-urgent-wash'
-                : 'bg-card',
-      )}
-    >
-      {upcoming ? (
-        <span className="absolute right-2 top-2 rounded-full border border-input px-1.5 py-0.5 font-data text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-          Next
-        </span>
-      ) : null}
-
-      <div className="flex items-center gap-2">
-        <StageIcon Icon={Icon} state={state} upcoming={upcoming} />
-        <div className="min-w-0">
-          <div
-            className={cn(
-              'truncate text-sm font-medium',
-              upcoming ? 'text-muted-foreground' : 'text-foreground',
-            )}
-          >
-            {stage.title}
-          </div>
-          <div className="truncate font-data text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-            {stage.actor}
-          </div>
-        </div>
+    <div className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-4">
+      <div className="relative flex justify-center pt-4">
+        {hasConnector ? (
+          <span
+            aria-hidden
+            className="absolute left-1/2 top-[1.375rem] h-[calc(100%+0.75rem)] w-0.5 -translate-x-1/2 bg-primary"
+          />
+        ) : null}
+        <TimelineDot state={state} upcoming={upcoming} />
       </div>
-
-      <p className="text-xs leading-5 text-muted-foreground">{stage.description}</p>
-
-      {stage.kind === 'deterministic' ? (
-        <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-          <KindChip icon={Gavel} label="Deterministic" tone="live" />
-          <KindChip icon={Sparkles} label="Agent judgment" tone="accent" />
-        </div>
-      ) : null}
+      <StageCard stage={stage} state={state} upcoming={upcoming} entries={entries} />
     </div>
   );
 }
 
-function StageIcon({
-  Icon,
+function TimelineDot({
   state,
   upcoming,
 }: {
-  Icon: LucideIcon;
   state: StageState;
   upcoming: boolean;
 }) {
-  const showCheck = state === 'done';
-  const showSpinner = state === 'active';
-
   return (
     <span
+      aria-hidden
+      style={{ borderColor: 'var(--primary)' }}
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-md border',
-        upcoming
-          ? 'border-dashed border-input text-muted-foreground'
-          : state === 'active'
-            ? 'border-primary/30 bg-primary text-primary-foreground'
-            : state === 'done'
-              ? 'border-live/30 bg-live-wash text-live'
-              : state === 'failed'
-                ? 'border-urgent/30 bg-urgent-wash text-urgent'
-                : 'border-border bg-secondary text-muted-foreground',
+        'relative z-10 size-3 rounded-full border-2 bg-card',
+        state === 'active' && 'ledger-recording bg-primary',
+        state === 'done' && 'bg-primary',
+        state === 'failed' && 'bg-card',
+        (state === 'planned' || upcoming) && 'bg-card',
       )}
-    >
-      {showCheck ? (
-        <Check className="size-4" />
-      ) : showSpinner ? (
-        <Loader2 className="size-4 animate-spin" />
-      ) : (
-        <Icon className="size-4" />
-      )}
-    </span>
+    />
   );
 }
 
-function Connector() {
+function StageCard({
+  stage,
+  state,
+  upcoming,
+  entries,
+}: {
+  stage: Stage;
+  state: StageState;
+  upcoming: boolean;
+  entries: LedgerEntry[];
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const DetailsIcon = detailsOpen ? ChevronDown : ChevronRight;
+
   return (
     <div
-      aria-hidden
-      className="flex items-center justify-center py-1 text-muted-foreground lg:px-1 lg:py-0"
-    >
-      <ArrowRight className="hidden size-4 lg:block" />
-      <span className="h-4 w-px bg-border lg:hidden" />
-    </div>
-  );
-}
-
-function Legend() {
-  return (
-    <div className="flex flex-wrap items-center gap-3 font-data text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <span aria-hidden className="size-2 rounded-full bg-live" />
-        Deterministic
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span aria-hidden className="size-2 rounded-full bg-primary" />
-        Agent judgment
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span aria-hidden className="size-2 rounded-full border border-input" />
-        Human · next
-      </span>
-    </div>
-  );
-}
-
-function KindChip({
-  icon: Icon,
-  label,
-  tone,
-}: {
-  icon: LucideIcon;
-  label: string;
-  tone: 'live' | 'accent';
-}) {
-  return (
-    <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
-        tone === 'live'
-          ? 'border-live/30 bg-live-wash text-live'
-          : 'border-primary/25 bg-accent text-accent-foreground',
+        'rounded-2xl border px-5 py-4 transition-colors',
+        upcoming
+          ? 'bg-card'
+          : state === 'active'
+            ? 'border-primary/40 bg-accent'
+            : state === 'failed'
+              ? 'border-urgent/40 bg-urgent-wash'
+              : 'bg-card',
       )}
     >
-      <Icon className="size-3" />
-      {label}
-    </span>
+      <div className="font-data text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+        {stage.actor}
+      </div>
+      <div
+        className={cn(
+          'mt-1 flex flex-wrap items-center gap-2 text-base font-semibold leading-tight',
+          upcoming ? 'text-muted-foreground' : 'text-foreground',
+        )}
+      >
+        <span>{stage.title}</span>
+        {upcoming ? (
+          <span className="rounded-md border border-input bg-card px-2 py-0.5 font-data text-[0.62rem] font-normal uppercase tracking-[0.12em] text-muted-foreground">
+            Next
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{stage.description}</p>
+
+      <button
+        type="button"
+        className="mt-3 flex w-full items-center justify-between border-t pt-3"
+        aria-expanded={detailsOpen}
+        onClick={() => setDetailsOpen(open => !open)}
+      >
+        <p className="m-0 text-sm font-normal leading-6 text-muted-foreground">Details</p>
+        <DetailsIcon className="size-4 text-muted-foreground" aria-hidden />
+      </button>
+
+      {detailsOpen ? <StageDetails entries={entries} /> : null}
+    </div>
   );
+}
+
+function StageDetails({ entries }: { entries: LedgerEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <p className="mt-3 rounded-xl border bg-secondary/60 px-4 py-3 text-sm leading-6 text-muted-foreground">
+        No information to view
+      </p>
+    );
+  }
+
+  return (
+    <ol className="mt-3 grid gap-3 rounded-xl border bg-secondary/60 px-4 py-3">
+      {entries.map(entry => (
+        <li key={entry.id} className="grid gap-1 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-3">
+          <span className="font-data text-xs tabular-nums text-muted-foreground">{entry.time}</span>
+          <span className="min-w-0">
+            <span
+              className={cn(
+                'block text-sm leading-5',
+                entry.kind === 'error' ? 'text-urgent' : 'text-foreground',
+              )}
+            >
+              {formatEventText(entry.label)}
+            </span>
+            {entry.detail ? (
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                {formatEventText(entry.detail)}
+              </span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function formatEventText(value: string) {
+  return value.replaceAll('docusign_getAllAgreements', 'Agreement discovery');
 }

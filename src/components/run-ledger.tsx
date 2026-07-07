@@ -1,5 +1,7 @@
 'use client';
 
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export type LedgerEntry = {
@@ -12,13 +14,45 @@ export type LedgerEntry = {
 
 export type LedgerPhase = 'idle' | 'recording' | 'complete' | 'failed';
 
-const PLANNED_STATIONS = [
-  'Workflow dispatched to Mastra',
-  'Intake Agent · Docusign MCP discovery',
-  'Agreement rows normalized',
-  'Deterministic policy brief created',
-  'Risk Review Agent judgment applied',
-  'Risk brief returned',
+type LedgerGroupId =
+  | 'workflow'
+  | 'intake'
+  | 'risk-review'
+  | 'run-close'
+  | 'human-review';
+
+type LedgerGroup = {
+  id: LedgerGroupId;
+  title: string;
+  kinds: string[];
+};
+
+const LEDGER_GROUPS: LedgerGroup[] = [
+  {
+    id: 'workflow',
+    title: 'Workflow',
+    kinds: ['run-open', 'dispatch'],
+  },
+  {
+    id: 'intake',
+    title: 'Intake Agent',
+    kinds: ['intake', 'tool-call', 'tool-result', 'normalize'],
+  },
+  {
+    id: 'risk-review',
+    title: 'Risk Review Agent',
+    kinds: ['risk-review', 'policy-tool-call', 'policy-tool-result'],
+  },
+  {
+    id: 'run-close',
+    title: 'Run closed',
+    kinds: ['run-close', 'error'],
+  },
+  {
+    id: 'human-review',
+    title: 'Human review',
+    kinds: ['human-approval', 'workflow-builder'],
+  },
 ];
 
 const phaseLabels: Record<LedgerPhase, string> = {
@@ -35,17 +69,22 @@ export function RunLedger({
   phase: LedgerPhase;
   entries: LedgerEntry[];
 }) {
+  const [openGroups, setOpenGroups] = useState<Set<LedgerGroupId>>(
+    () => new Set(['risk-review']),
+  );
+  const visibleGroups = groupsWithEntries(entries, phase);
+
   return (
     <aside
-      className="rounded-lg border bg-card"
+      className="flex h-full min-h-0 flex-col bg-secondary/70 pb-6 pl-10 pr-6 sm:pl-14 lg:pl-16"
       aria-label="Run ledger"
       aria-live="polite"
     >
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <span className="font-data text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <header className="flex items-center justify-between border-b py-4">
+        <span className="font-data text-xs font-semibold uppercase tracking-[0.24em] text-foreground">
           Run ledger
         </span>
-        <span className="flex items-center gap-1.5 font-data text-[11px] uppercase tracking-[0.08em]">
+        <span className="flex items-center gap-2 font-data text-xs uppercase tracking-[0.14em]">
           <span
             aria-hidden
             className={cn(
@@ -58,7 +97,7 @@ export function RunLedger({
           />
           <span
             className={cn(
-              phase === 'recording' && 'text-accent-foreground',
+              phase === 'recording' && 'text-primary',
               phase === 'complete' && 'text-live',
               phase === 'failed' && 'text-urgent',
               phase === 'idle' && 'text-muted-foreground',
@@ -69,79 +108,136 @@ export function RunLedger({
         </span>
       </header>
 
-      {phase === 'idle' ? <PlannedRoute /> : <RecordedEntries entries={entries} phase={phase} />}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {visibleGroups.map(group => (
+          <LedgerAccordion
+            key={group.id}
+            group={group}
+            entries={entriesForGroup(entries, group)}
+            open={openGroups.has(group.id)}
+            phase={phase}
+            onToggle={() =>
+              setOpenGroups(current => {
+                const next = new Set(current);
+
+                if (next.has(group.id)) {
+                  next.delete(group.id);
+                } else {
+                  next.add(group.id);
+                }
+
+                return next;
+              })
+            }
+          />
+        ))}
+      </div>
     </aside>
   );
 }
 
-function PlannedRoute() {
+function LedgerAccordion({
+  group,
+  entries,
+  open,
+  phase,
+  onToggle,
+}: {
+  group: LedgerGroup;
+  entries: LedgerEntry[];
+  open: boolean;
+  phase: LedgerPhase;
+  onToggle: () => void;
+}) {
+  const hasEntries = entries.length > 0;
+
   return (
-    <div className="px-4 py-4">
-      <ol className="relative flex flex-col gap-4 border-l pl-4">
-        {PLANNED_STATIONS.map(station => (
-          <li key={station} className="relative text-sm text-muted-foreground">
-            <span
-              aria-hidden
-              className="absolute -left-[21.5px] top-1.5 size-2 rounded-full border border-input bg-card"
-            />
-            {station}
-          </li>
-        ))}
-      </ol>
-      <p className="mt-5 border-t pt-3 text-xs leading-5 text-muted-foreground">
-        Each run is recorded here as the Mastra workflow reports it, entry by entry.
-      </p>
-    </div>
+    <section className="border-b">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-4 py-4 text-left"
+        onClick={onToggle}
+      >
+        <span className="text-base font-semibold leading-tight text-foreground">{group.title}</span>
+        {open ? (
+          <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+        ) : (
+          <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+        )}
+      </button>
+
+      {open ? (
+        <div className="pb-4">
+          {hasEntries ? (
+            <ol className="grid gap-4">
+              {entries.map((entry, index) => (
+                <LedgerEvent
+                  key={entry.id}
+                  entry={entry}
+                  active={phase === 'recording' && index === entries.length - 1}
+                />
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm leading-6 text-muted-foreground">
+              No information to view
+            </p>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
-function RecordedEntries({
-  entries,
-  phase,
+function LedgerEvent({
+  entry,
+  active,
 }: {
-  entries: LedgerEntry[];
-  phase: LedgerPhase;
+  entry: LedgerEntry;
+  active: boolean;
 }) {
   return (
-    <div className="px-4 py-4">
-      <ol className="relative flex flex-col gap-4 border-l pl-4">
-        {entries.map((entry, index) => {
-          const isLast = index === entries.length - 1;
-          const isActive = isLast && phase === 'recording';
-
-          return (
-            <li key={entry.id} className="ledger-entry-in relative">
-              <span
-                aria-hidden
-                className={cn(
-                  'absolute -left-[21.5px] top-1.5 size-2 rounded-full',
-                  entry.kind === 'error'
-                    ? 'bg-urgent'
-                    : isActive
-                      ? 'ledger-recording bg-primary'
-                      : isLast
-                        ? 'bg-primary'
-                        : 'border border-primary/50 bg-card',
-                )}
-              />
-              <div className="font-data text-[11px] tabular-nums text-muted-foreground">
-                {entry.time}
-              </div>
-              <div
-                className={cn(
-                  'text-sm leading-5',
-                  entry.kind === 'error' ? 'text-urgent' : 'text-foreground',
-                )}
-              >
-                {entry.label}
-              </div>
-              {entry.detail ? (
-                <div className="text-xs leading-5 text-muted-foreground">{entry.detail}</div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+    <li className="ledger-entry-in grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3">
+      <span className="font-data text-xs tabular-nums text-muted-foreground">{entry.time}</span>
+      <span className="min-w-0">
+        <span
+          className={cn(
+            'block text-sm leading-5',
+            entry.kind === 'error' ? 'text-urgent' : 'text-foreground',
+          )}
+        >
+          {entry.label}
+        </span>
+        {entry.detail ? (
+          <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+            {entry.detail}
+          </span>
+        ) : null}
+        {active ? (
+          <span className="mt-2 inline-flex items-center gap-2 font-data text-[0.65rem] uppercase tracking-[0.14em] text-primary">
+            <span aria-hidden className="ledger-recording size-1.5 rounded-full bg-primary" />
+            Live
+          </span>
+        ) : null}
+      </span>
+    </li>
   );
+}
+
+function groupsWithEntries(entries: LedgerEntry[], phase: LedgerPhase) {
+  if (phase === 'idle') {
+    return LEDGER_GROUPS.slice(0, 3);
+  }
+
+  const groups = LEDGER_GROUPS.filter(group => entriesForGroup(entries, group).length > 0);
+
+  if (groups.length === 0) {
+    return LEDGER_GROUPS.slice(0, 3);
+  }
+
+  return groups;
+}
+
+function entriesForGroup(entries: LedgerEntry[], group: LedgerGroup) {
+  return entries.filter(entry => group.kinds.includes(entry.kind));
 }
