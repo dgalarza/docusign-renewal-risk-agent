@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LedgerEntry } from '@/components/run-ledger';
 import { PipelineOverview, type PipelinePhase } from '@/components/pipeline-overview';
-import { cn } from '@/lib/utils';
+import { cn, withDocusignUtmParams } from '@/lib/utils';
 
 type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
 
@@ -908,7 +908,7 @@ function RenewalDetailPanel({
                     Source record
                   </p>
                   <a
-                    href={row.source.recordUrl}
+                    href={withDocusignUtmParams(row.source.recordUrl)}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-3 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
