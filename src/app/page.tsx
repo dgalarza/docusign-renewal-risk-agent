@@ -327,7 +327,9 @@ export default function RenewalDiscoveryPage() {
               </Alert>
             ) : null}
 
-            {status !== 'loading' ? <ResultBar result={result} status={status} /> : null}
+            {status !== 'idle' && status !== 'loading' ? (
+              <ResultBar result={result} status={status} />
+            ) : null}
 
             {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
             {result?.riskReview ? (
@@ -355,7 +357,7 @@ export default function RenewalDiscoveryPage() {
                 }}
                 onSubmitDecision={submitDecision}
               />
-            ) : status !== 'loading' ? (
+            ) : status !== 'idle' && status !== 'loading' ? (
               <EmptyState
                 status={status}
                 isLoading={isLoading}
