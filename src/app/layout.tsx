@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, Inter, Spectral } from 'next/font/google';
+import { IBM_Plex_Mono, Inter, Newsreader } from 'next/font/google';
 import type { ReactNode } from 'react';
 import './globals.css';
 
@@ -8,11 +8,11 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-const spectral = Spectral({
+const newsreader = Newsreader({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
   style: ['normal', 'italic'],
-  variable: '--font-spectral',
+  variable: '--font-newsreader',
 });
 
 const plexMono = IBM_Plex_Mono({
@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spectral.variable} ${plexMono.variable}`}
+      className={`${inter.variable} ${newsreader.variable} ${plexMono.variable}`}
     >
       <body>{children}</body>
     </html>

@@ -1,6 +1,15 @@
 'use client';
 
-import { AlertCircle, CheckCircle2, ExternalLink, FileSearch, Loader2, Search, Send } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  FileSearch,
+  Loader2,
+  Search,
+} from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RenewalAgreementTableRow,
@@ -13,15 +22,7 @@ import type {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { RunLedger, type LedgerEntry, type LedgerPhase } from '@/components/run-ledger';
+import type { LedgerEntry } from '@/components/run-ledger';
 import { PipelineOverview, type PipelinePhase } from '@/components/pipeline-overview';
 import { cn, withDocusignUtmParams } from '@/lib/utils';
 
@@ -102,23 +103,6 @@ export default function RenewalDiscoveryPage() {
   const rows = result?.rows ?? [];
   const isLoading = status === 'loading';
   const activeStage = deriveActiveStage(entries);
-
-  const selectedRow = rows.find(row => row.agreementId === selectedAgreementId) ?? null;
-  const selectedFinding =
-    (selectedRow &&
-      result?.riskBrief?.findings.find(
-        finding => finding.agreementId === selectedRow.agreementId,
-      )) ??
-    null;
-  const selectedGuidance =
-    (selectedRow &&
-      result?.riskReview?.reviewerGuidance.find(
-        guidance => guidance.agreementId === selectedRow.agreementId,
-      )) ??
-    null;
-  const selectedDecisionResult = selectedRow
-    ? decisionResults[selectedRow.agreementId] ?? null
-    : null;
 
   const pushEntry = (kind: string, label: string, detail: string | null = null) => {
     entryIdRef.current += 1;
@@ -275,28 +259,26 @@ export default function RenewalDiscoveryPage() {
   }
 
   return (
-    <main className="min-h-screen">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8">
-          <div className="max-w-2xl">
-            <p className="mb-3 font-data text-[11px] font-medium uppercase tracking-[0.2em] text-accent-foreground">
+    <main className="min-h-screen bg-card">
+      <div className="grid min-h-screen w-full bg-card lg:grid-cols-[24rem_minmax(0,1fr)] xl:grid-cols-[28rem_minmax(0,1fr)]">
+        <aside className="flex min-w-0 flex-col border-b bg-secondary/70 lg:border-b-0 lg:border-r">
+          <div className="py-7 pl-10 pr-6 sm:pl-14 lg:pl-16">
+            <p className="font-data text-xs font-semibold uppercase tracking-[0.24em] text-primary">
               Renewal risk · Intake Agent
             </p>
-            <h1 className="font-display text-4xl font-medium leading-tight text-foreground">
+            <h1 className="mt-5 font-display text-[2.85rem] font-medium leading-[0.98] text-foreground">
               Supplier renewal discovery
             </h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            <p className="mt-6 text-base leading-7 text-muted-foreground">
               Completed supplier agreements from Docusign Agreement Manager, screened for
               renewal dates inside the next {DEFAULT_REVIEW_WINDOW_DAYS} days.
             </p>
-          </div>
 
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="grid gap-2 text-sm font-medium text-muted-foreground">
+            <div className="mt-8 rounded-2xl border bg-card px-5 py-5">
+              <label className="grid gap-2 text-sm font-semibold text-muted-foreground">
                 As of date
                 <Input
-                  className="bg-card"
+                  className="h-12 rounded-xl border-border bg-card px-4 font-data text-base text-foreground"
                   type="date"
                   value={asOfDate}
                   onChange={event => {
@@ -309,105 +291,81 @@ export default function RenewalDiscoveryPage() {
                 />
               </label>
 
-              <Button disabled={isLoading} onClick={discoverRenewals}>
+              <Button className="mt-4 h-12 w-full justify-center rounded-lg text-base font-semibold shadow-[0_0.5rem_1rem_rgba(67,56,202,0.18)]" disabled={isLoading} onClick={discoverRenewals}>
                 {isLoading ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-5 animate-spin" />
                 ) : (
-                  <Search className="size-4" />
+                  <Search className="size-5" />
                 )}
-                Run discovery
+                {result ? 'Re-run discovery' : 'Run discovery'}
               </Button>
+              <p className="mt-5 text-center font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+                Review window · {DEFAULT_REVIEW_WINDOW_DAYS} days
+              </p>
             </div>
-            <p className="font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground sm:text-right">
-              Review window · {DEFAULT_REVIEW_WINDOW_DAYS} days
-            </p>
           </div>
-        </div>
-      </header>
 
-      <div className="mx-auto w-full max-w-[1440px] px-4 pt-8 sm:px-6 lg:px-8">
-        <PipelineOverview phase={toPipelinePhase(status)} activeStage={activeStage} />
-      </div>
+        </aside>
 
-      <div className="mx-auto grid w-full max-w-[1440px] items-start gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:px-8">
-        <RunLedger phase={toLedgerPhase(status)} entries={entries} />
+        <section className="min-w-0 overflow-y-auto px-6 py-7 sm:px-10 lg:px-12">
+          <div className="flex flex-col gap-7">
+            <PipelineOverview
+              phase={toPipelinePhase(status)}
+              activeStage={activeStage}
+              entries={entries}
+            />
 
-        <div className="flex min-w-0 flex-col gap-6">
-          {status === 'error' && result ? (
-            <Alert variant="destructive">
-              <AlertTitle className="flex items-center gap-2">
-                <AlertCircle className="size-4" />
-                Renewal discovery failed
-              </AlertTitle>
-              <AlertDescription>
-                {[result.message, ...result.errors].filter(Boolean).join(' ')}
-              </AlertDescription>
-            </Alert>
-          ) : null}
+            {status === 'error' && result ? (
+              <Alert variant="destructive">
+                <AlertTitle className="flex items-center gap-2">
+                  <AlertCircle className="size-4" />
+                  Renewal discovery failed
+                </AlertTitle>
+                <AlertDescription>
+                  {[result.message, ...result.errors].filter(Boolean).join(' ')}
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
-          <ResultBar result={result} status={status} />
+            {status !== 'idle' && status !== 'loading' ? (
+              <ResultBar result={result} status={status} />
+            ) : null}
 
-          {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
-          {result?.riskReview ? (
-            <RiskReviewPanel rows={rows} riskReview={result.riskReview} />
-          ) : null}
+            {rows.length > 0 ? <SummaryStrip rows={rows} riskBrief={result?.riskBrief ?? null} /> : null}
+            {result?.riskReview ? (
+              <RiskReviewPanel
+                rows={rows}
+                riskBrief={result.riskBrief}
+                riskReview={result.riskReview}
+              />
+            ) : null}
 
-          {rows.length > 0 ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)] xl:items-start">
-              <section className="min-w-0 overflow-x-auto rounded-lg border bg-card">
-                <Table className="min-w-[760px]">
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Supplier</TableHead>
-                      <TableHead>Renewal date</TableHead>
-                      <TableHead>Notice deadline</TableHead>
-                      <TableHead className="text-right">Days to notice</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead>Renewal type</TableHead>
-                      <TableHead>Risk</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map(row => (
-                      <AgreementRow
-                        key={row.agreementId}
-                        row={row}
-                        finding={
-                          result?.riskBrief?.findings.find(
-                            riskFinding => riskFinding.agreementId === row.agreementId,
-                          ) ?? null
-                        }
-                        selected={row.agreementId === selectedAgreementId}
-                        onSelect={() => {
-                          setDecisionError(null);
-                          setSelectedAgreementId(current =>
-                            current === row.agreementId ? null : row.agreementId,
-                          );
-                        }}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </section>
-
-              <RenewalDetailPanel
-                row={selectedRow}
-                finding={selectedFinding}
-                guidance={selectedGuidance}
-                decisionResult={selectedDecisionResult}
+            {rows.length > 0 ? (
+              <AgreementList
+                rows={rows}
+                riskBrief={result?.riskBrief ?? null}
+                riskReview={result?.riskReview ?? null}
+                selectedAgreementId={selectedAgreementId}
+                decisionResults={decisionResults}
                 decisionError={decisionError}
-                decisionPending={selectedRow?.agreementId === decisionLoadingId}
+                decisionLoadingId={decisionLoadingId}
+                onSelect={agreementId => {
+                  setDecisionError(null);
+                  setSelectedAgreementId(current =>
+                    current === agreementId ? null : agreementId,
+                  );
+                }}
                 onSubmitDecision={submitDecision}
               />
-            </div>
-          ) : (
-            <section className="rounded-lg border bg-card">
-              <div className="flex h-32 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                {emptyStateMessage(status)}
-              </div>
-            </section>
-          )}
-        </div>
+            ) : status !== 'idle' && status !== 'loading' ? (
+              <EmptyState
+                status={status}
+                isLoading={isLoading}
+                onRun={discoverRenewals}
+              />
+            ) : null}
+          </div>
+        </section>
       </div>
     </main>
   );
@@ -427,6 +385,44 @@ function emptyStateMessage(status: UiStatus) {
   }
 
   return 'Run discovery to pull completed supplier agreements from Docusign Agreement Manager.';
+}
+
+function EmptyState({
+  status,
+  isLoading,
+  onRun,
+}: {
+  status: UiStatus;
+  isLoading: boolean;
+  onRun: () => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-secondary/60">
+      <div className="border-b bg-card px-6 py-4">
+        <span className="font-data text-xs uppercase tracking-[0.08em] text-muted-foreground">
+          Docusign MCP · {status === 'idle' ? 'No run recorded yet for this date' : statusLabels[status]}
+        </span>
+      </div>
+      <div className="flex min-h-72 flex-col items-center justify-center gap-5 px-8 py-14 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl border bg-card">
+          {isLoading ? (
+            <Loader2 className="size-6 animate-spin text-primary" aria-hidden />
+          ) : (
+            <Search className="size-6 text-muted-foreground" aria-hidden />
+          )}
+        </div>
+        <p className="max-w-xl text-base leading-7 text-muted-foreground">
+          {emptyStateMessage(status)}
+        </p>
+        {status === 'idle' || status === 'empty' ? (
+          <Button className="rounded-lg" disabled={isLoading} onClick={onRun}>
+            <Search className="size-4" />
+            Run discovery
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 function deriveActiveStage(entries: LedgerEntry[]): number {
@@ -459,22 +455,6 @@ function toPipelinePhase(status: UiStatus): PipelinePhase {
   return 'complete';
 }
 
-function toLedgerPhase(status: UiStatus): LedgerPhase {
-  if (status === 'idle') {
-    return 'idle';
-  }
-
-  if (status === 'loading') {
-    return 'recording';
-  }
-
-  if (status === 'error') {
-    return 'failed';
-  }
-
-  return 'complete';
-}
-
 function ResultBar({
   result,
   status,
@@ -497,14 +477,14 @@ function ResultBar({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 rounded-2xl border bg-card px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <div className="font-data text-xs text-muted-foreground">
+        <div className="font-data text-xs uppercase tracking-[0.06em] text-muted-foreground">
           {sourceLabel}
-          {result?.selectedTool ? ` · ${result.selectedTool}` : ''}
+          {result?.selectedTool ? ` · ${formatToolName(result.selectedTool)}` : ''}
         </div>
         {message ? (
-          <p className="mt-1 text-sm leading-5 text-foreground">{message}</p>
+          <p className="mt-3 text-sm leading-6 text-foreground">{message}</p>
         ) : null}
       </div>
       <StatusChip status={status} />
@@ -516,7 +496,7 @@ function StatusChip({ status }: { status: UiStatus }) {
   return (
     <span
       className={cn(
-        'w-fit shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        'w-fit shrink-0 rounded-full border px-3 py-1 font-data text-[0.68rem] font-medium uppercase tracking-[0.04em]',
         status === 'live' && 'border-live/30 bg-live-wash text-live',
         status === 'missing_fields' && 'border-caution/30 bg-caution-wash text-caution',
         status === 'error' && 'border-urgent/30 bg-urgent-wash text-urgent',
@@ -551,7 +531,7 @@ function SummaryStrip({
     riskBrief?.findings.filter(finding => finding.recommendedAction === 'legal_review').length ?? 0;
 
   return (
-    <dl className="grid grid-cols-2 divide-border rounded-lg border bg-card sm:grid-cols-4 sm:divide-x">
+    <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <StatTile
         label="Reviewed"
         value={String(riskBrief?.agreementsReviewed ?? rows.length)}
@@ -595,56 +575,92 @@ function StatTile({
   detail?: string | null;
 }) {
   return (
-    <div className="flex flex-col gap-1 px-4 py-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="m-0 text-xl font-semibold text-foreground">{value}</dd>
-      {detail ? <p className="m-0 truncate text-xs text-muted-foreground">{detail}</p> : null}
+    <div className="rounded-2xl border bg-card px-5 py-5">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="m-0 mt-3 font-display text-[2.35rem] font-medium leading-none text-foreground">
+        {value}
+      </dd>
+      {detail ? <p className="m-0 mt-2 truncate text-xs text-muted-foreground">{detail}</p> : null}
     </div>
   );
 }
 
 function RiskReviewPanel({
   rows,
+  riskBrief,
   riskReview,
 }: {
   rows: RenewalAgreementTableRow[];
+  riskBrief: RenewalReviewWorkflowResult['riskBrief'];
   riskReview: NonNullable<RenewalReviewWorkflowResult['riskReview']>;
 }) {
   const supplierByAgreementId = new Map(rows.map(row => [row.agreementId, row.supplier]));
-  const priorityLabels = riskReview.priorityAgreementIds
-    .map(agreementId => supplierByAgreementId.get(agreementId) ?? agreementId)
-    .slice(0, 3);
+  const rowByAgreementId = new Map(rows.map(row => [row.agreementId, row]));
+  const findingByAgreementId = new Map(
+    riskBrief?.findings.map(finding => [finding.agreementId, finding]) ?? [],
+  );
+  const guidanceByAgreementId = new Map(
+    riskReview.reviewerGuidance.map(guidance => [guidance.agreementId, guidance]),
+  );
+  const priorityGuidance = riskReview.priorityAgreementIds
+    .map(agreementId => guidanceByAgreementId.get(agreementId))
+    .filter(guidance => guidance !== undefined);
+  const displayedGuidance =
+    priorityGuidance.length > 0 ? priorityGuidance.slice(0, 3) : riskReview.reviewerGuidance.slice(0, 3);
 
   return (
-    <section className="rounded-lg border bg-card px-4 py-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-        <div>
-          <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-accent-foreground">
-            Risk Review Agent judgment
-          </p>
-          <p className="mt-2 text-sm leading-6 text-foreground">
-            {riskReview.portfolioJudgment}
-          </p>
-          {priorityLabels.length > 0 ? (
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              Review first: {priorityLabels.join(', ')}
+    <section className="rounded-2xl border bg-card px-6 py-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(22rem,1fr)]">
+        <div className="flex flex-col justify-between gap-5">
+          <div>
+            <p className="font-data text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+              Review summary
             </p>
+            <h2 className="mt-3 text-lg font-semibold leading-7 text-foreground">
+              {riskReview.portfolioJudgment}
+            </h2>
+          </div>
+          {displayedGuidance.length > 0 ? (
+            <ul className="grid gap-2 text-sm leading-6 text-foreground">
+              {displayedGuidance.map(guidance => {
+                const row = rowByAgreementId.get(guidance.agreementId);
+                const finding = findingByAgreementId.get(guidance.agreementId);
+
+                return (
+                  <li key={guidance.agreementId}>
+                    {formatPriorityActionSummary({ guidance, finding, row })}
+                  </li>
+                );
+              })}
+            </ul>
           ) : null}
         </div>
-        <div className="grid gap-3">
-          {riskReview.reviewerGuidance.slice(0, 3).map(guidance => (
-            <div key={guidance.agreementId} className="border-l-2 border-accent-foreground pl-3">
-              <div className="text-sm font-medium text-foreground">
-                {supplierByAgreementId.get(guidance.agreementId) ?? guidance.agreementId}
-              </div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {guidance.judgment}
-              </p>
-              <p className="mt-1 font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                {formatSuggestedReviewer(guidance.suggestedReviewer)}
-              </p>
-            </div>
-          ))}
+        <div className="border-t pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+          <p className="font-data text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Recommended next actions
+          </p>
+          <div className="mt-4 grid gap-3">
+            {displayedGuidance.map(guidance => {
+              const finding = findingByAgreementId.get(guidance.agreementId);
+
+              return (
+                <div key={guidance.agreementId} className="rounded-xl border bg-card px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">
+                      {supplierByAgreementId.get(guidance.agreementId) ?? guidance.agreementId}
+                    </span>
+                    {finding ? <RiskClassification finding={finding} /> : null}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {guidance.reasonForPriority || guidance.judgment}
+                  </p>
+                  <p className="mt-2 font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+                    {formatSuggestedReviewer(guidance.suggestedReviewer)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>
@@ -664,73 +680,229 @@ function formatSuggestedReviewer(
   return labels[reviewer];
 }
 
-function AgreementRow({
+function formatPriorityActionSummary({
+  guidance,
+  finding,
+  row,
+}: {
+  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
+  finding: RenewalRiskFinding | undefined;
+  row: RenewalAgreementTableRow | undefined;
+}) {
+  const supplier = row?.supplier ?? finding?.supplierName ?? guidance.agreementId;
+  const reason = formatPriorityReason({ guidance, finding, row });
+  const action = formatPriorityAction(finding?.recommendedAction);
+
+  return `${supplier} — ${reason} → ${action}`;
+}
+
+function formatPriorityReason({
+  guidance,
+  finding,
+  row,
+}: {
+  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
+  finding: RenewalRiskFinding | undefined;
+  row: RenewalAgreementTableRow | undefined;
+}) {
+  const parts: string[] = [];
+  const daysUntilNotice = finding?.daysUntilNoticeDeadline ?? row?.daysUntilNoticeDeadline;
+
+  if (typeof daysUntilNotice === 'number') {
+    parts.push(formatNoticeTiming(daysUntilNotice));
+  }
+
+  if (typeof row?.agreementValue === 'number') {
+    parts.push(formatCompactMoney(row.agreementValue, row.currency));
+  }
+
+  if (row?.renewalType === 'auto_renews') {
+    parts.push('auto-renew');
+  }
+
+  if (row?.source.missingFields.length) {
+    parts.push('missing fields');
+  }
+
+  return parts.length > 0 ? parts.join(', ') : guidance.reasonForPriority || guidance.judgment;
+}
+
+function formatNoticeTiming(daysUntilNotice: number) {
+  const absoluteDays = Math.abs(daysUntilNotice);
+  const unit = absoluteDays === 1 ? 'day' : 'days';
+
+  if (daysUntilNotice < 0) {
+    return `${absoluteDays} ${unit} overdue`;
+  }
+
+  if (daysUntilNotice === 0) {
+    return 'due today';
+  }
+
+  return `${daysUntilNotice} ${unit} to notice`;
+}
+
+function formatCompactMoney(value: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+    .format(value)
+    .replace('K', 'k');
+}
+
+function formatPriorityAction(action: FollowUpAction | undefined) {
+  const labels: Record<FollowUpAction, string> = {
+    no_action: 'no action',
+    owner_review: 'owner review',
+    legal_review: 'send to legal',
+    renegotiate: 'renegotiate',
+    prepare_cancellation_notice: 'prepare cancellation',
+    escalate_missed_deadline: 'escalate now',
+  };
+
+  return action ? labels[action] : 'review';
+}
+
+function AgreementList({
+  rows,
+  riskBrief,
+  riskReview,
+  selectedAgreementId,
+  decisionResults,
+  decisionError,
+  decisionLoadingId,
+  onSelect,
+  onSubmitDecision,
+}: {
+  rows: RenewalAgreementTableRow[];
+  riskBrief: RenewalReviewWorkflowResult['riskBrief'];
+  riskReview: RenewalReviewWorkflowResult['riskReview'];
+  selectedAgreementId: string | null;
+  decisionResults: Record<string, RenewalDecisionResult>;
+  decisionError: string | null;
+  decisionLoadingId: string | null;
+  onSelect: (agreementId: string) => void;
+  onSubmitDecision: (input: {
+    row: RenewalAgreementTableRow;
+    finding: RenewalRiskFinding;
+    decision: 'approved' | 'edited' | 'rejected';
+    selectedAction: FollowUpAction;
+    notes: string;
+  }) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-card">
+      <div className="hidden grid-cols-[minmax(0,2fr)_minmax(7rem,0.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_2rem] gap-3 border-b bg-secondary/70 px-5 py-4 sm:grid">
+        <span className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+          Supplier
+        </span>
+        <span className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+          Status
+        </span>
+        <span className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+          Renewal date
+        </span>
+        <span className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+          Notice deadline
+        </span>
+        <span aria-hidden />
+      </div>
+
+      {rows.map(row => {
+        const finding =
+          riskBrief?.findings.find(riskFinding => riskFinding.agreementId === row.agreementId) ??
+          null;
+        const guidance =
+          riskReview?.reviewerGuidance.find(
+            reviewerGuidance => reviewerGuidance.agreementId === row.agreementId,
+          ) ?? null;
+        const expanded = row.agreementId === selectedAgreementId;
+
+        return (
+          <div key={row.agreementId} className="border-b last:border-b-0">
+            <AgreementSummaryRow
+              row={row}
+              finding={finding}
+              expanded={expanded}
+              onSelect={() => onSelect(row.agreementId)}
+            />
+            {expanded ? (
+              <RenewalDetailPanel
+                row={row}
+                finding={finding}
+                guidance={guidance}
+                decisionResult={decisionResults[row.agreementId] ?? null}
+                decisionError={decisionError}
+                decisionPending={row.agreementId === decisionLoadingId}
+                onSubmitDecision={onSubmitDecision}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function AgreementSummaryRow({
   row,
   finding,
-  selected,
+  expanded,
   onSelect,
 }: {
   row: RenewalAgreementTableRow;
   finding: RenewalRiskFinding | null;
-  selected: boolean;
+  expanded: boolean;
   onSelect: () => void;
 }) {
-  const missing = row.source.missingFields;
+  const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
-    <TableRow
-      aria-selected={selected}
+    <button
+      type="button"
+      aria-expanded={expanded}
       onClick={onSelect}
       className={cn(
-        'cursor-pointer transition-colors',
-        selected && 'bg-accent hover:bg-accent',
+        'grid w-full grid-cols-1 gap-3 px-5 py-4 text-left transition-colors sm:grid-cols-[minmax(0,2fr)_minmax(7rem,0.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_2rem]',
+        expanded ? 'bg-accent shadow-[inset_0.25rem_0_0_var(--primary)]' : 'bg-card hover:bg-secondary/50',
       )}
     >
-      <TableCell className="font-medium text-foreground">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className={cn(
-              'h-8 w-0.5 shrink-0 rounded-full transition-colors',
-              selected ? 'bg-primary' : 'bg-transparent',
-            )}
-          />
-          <div className="min-w-0">
-            <div className="truncate">{row.supplier}</div>
-            <div className="flex items-center gap-1.5">
-              <span className="max-w-52 truncate text-xs font-normal text-muted-foreground">
-                {row.agreementTitle}
-              </span>
-              {missing.length > 0 ? (
-                <span
-                  aria-hidden
-                  className="inline-block size-1.5 shrink-0 rounded-full bg-caution"
-                  title={`Missing fields: ${missing.join(', ')}`}
-                />
-              ) : null}
-            </div>
-          </div>
+      <div className="min-w-0">
+        <div className="flex items-center">
+          <span className="truncate text-sm font-semibold text-foreground">{row.supplier}</span>
         </div>
-      </TableCell>
-      <TableCell>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <span className="truncate text-xs text-muted-foreground">{row.agreementTitle}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 sm:hidden">
+          <MoneyValue value={row.agreementValue} currency={row.currency} />
+        </div>
+      </div>
+      <div className="self-center">
+        <span className="mb-1 block font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
+          Status
+        </span>
+        {finding ? <RiskClassification finding={finding} /> : <NotReviewed />}
+      </div>
+      <div className="self-center">
+        <span className="mb-1 block font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
+          Renewal date
+        </span>
         <DataValue value={row.renewalDate} />
-      </TableCell>
-      <TableCell>
+      </div>
+      <div className="self-center">
+        <span className="mb-1 block font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
+          Notice deadline
+        </span>
         <DataValue value={row.noticeDeadline} />
-      </TableCell>
-      <TableCell className="text-right">
-        <DaysToNotice days={row.daysUntilNoticeDeadline} />
-      </TableCell>
-      <TableCell className="text-right">
-        <MoneyValue value={row.agreementValue} currency={row.currency} />
-      </TableCell>
-      <TableCell>
-        <RenewalTypeLabel value={row.renewalType} />
-      </TableCell>
-      <TableCell>
-        {finding ? <RiskClassification finding={finding} /> : <NotExtracted />}
-      </TableCell>
-    </TableRow>
+      </div>
+      <span className="hidden items-center justify-center self-center text-muted-foreground sm:flex">
+        <Chevron className="size-4" aria-hidden />
+      </span>
+    </button>
   );
 }
 
@@ -767,7 +939,7 @@ function RenewalDetailPanel({
 
   if (!row) {
     return (
-      <aside className="hidden rounded-lg border border-dashed bg-card xl:sticky xl:top-6 xl:block">
+      <aside className="hidden rounded-lg border border-dashed bg-card xl:block">
         <div className="flex min-h-56 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
           <FileSearch className="size-6 text-muted-foreground" aria-hidden />
           <p className="text-sm font-medium text-foreground">Select an agreement</p>
@@ -780,127 +952,91 @@ function RenewalDetailPanel({
     );
   }
 
-  const missing = row.source.missingFields;
-
   return (
-    <aside
-      className="rounded-lg border bg-card xl:sticky xl:top-6"
+    <div
+      className="bg-secondary/55 px-5 py-5"
       aria-label={`Renewal-risk detail for ${row.supplier}`}
     >
-      <div className="border-b px-4 py-4">
-        <p className="font-data text-[11px] font-medium uppercase tracking-[0.16em] text-accent-foreground">
-          Renewal-risk detail
-        </p>
-        <h2 className="mt-2 font-display text-xl font-medium leading-tight text-foreground">
-          {row.supplier}
-        </h2>
-        <p className="mt-1 text-sm leading-5 text-muted-foreground">{row.agreementTitle}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {finding ? <RiskClassification finding={finding} /> : <NotReviewed />}
-          {finding ? (
-            <span className="inline-flex items-center rounded-full border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-              <ActionValue action={finding.recommendedAction} />
-            </span>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
+        <div className="flex h-full flex-col gap-5">
+          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailFact label="Renewal date">
+              <DataValue value={row.renewalDate} />
+            </DetailFact>
+            <DetailFact label="Notice deadline">
+              <DataValue value={row.noticeDeadline} />
+            </DetailFact>
+            <DetailFact label="Renewal type">
+              <RenewalTypeLabel value={row.renewalType} />
+            </DetailFact>
+            <DetailFact label="Notice period">
+              <NoticePeriodValue noticePeriodDays={row.noticePeriodDays} />
+            </DetailFact>
+            <DetailFact label="Days to notice">
+              <DaysToNotice days={row.daysUntilNoticeDeadline} />
+            </DetailFact>
+            <DetailFact label="Contract value">
+              <MoneyValue value={row.agreementValue} currency={row.currency} />
+            </DetailFact>
+          </dl>
+
+          {guidance || finding || row.source.recordUrl ? (
+            <div className="flex flex-1 flex-col rounded-xl border bg-card px-4 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <p className="font-data text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">
+                  Risk Review Agent
+                </p>
+              </div>
+
+              {guidance ? (
+                <>
+                  <p className="mt-4 text-sm leading-6 text-foreground">
+                    {guidance.judgment}
+                  </p>
+                  {guidance.reasonForPriority ? (
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                      {guidance.reasonForPriority}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+
+              {row.source.recordUrl ? (
+                <div className="mt-auto border-t pt-4">
+                  <p className="font-data text-[0.68rem] uppercase tracking-[0.08em] text-muted-foreground">
+                    Source record
+                  </p>
+                  <a
+                    href={withDocusignUtmParams(row.source.recordUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Open in Docusign
+                    <ExternalLink className="size-3" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
+
+        <div className="space-y-5">
+          <DecisionPanel
+            row={row}
+            finding={finding}
+            selectedAction={selectedAction}
+            setSelectedAction={setSelectedAction}
+            notes={notes}
+            setNotes={setNotes}
+            decisionResult={decisionResult}
+            decisionError={decisionError}
+            decisionPending={decisionPending}
+            onSubmitDecision={onSubmitDecision}
+          />
+        </div>
       </div>
-
-      {finding ? (
-        <div className="border-b px-4 py-4">
-          <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Policy rationale
-          </p>
-          <p className="mt-2 text-sm leading-6 text-foreground">{finding.rationale}</p>
-        </div>
-      ) : null}
-
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 border-b px-4 py-4">
-        <DetailFact label="Renewal date">
-          <DataValue value={row.renewalDate} />
-        </DetailFact>
-        <DetailFact label="Renewal type">
-          <RenewalTypeLabel value={row.renewalType} />
-        </DetailFact>
-        <DetailFact label="Notice period">
-          <NoticePeriodValue noticePeriodDays={row.noticePeriodDays} />
-        </DetailFact>
-        <DetailFact label="Notice deadline">
-          <DataValue value={row.noticeDeadline} />
-        </DetailFact>
-        <DetailFact label="Days to notice">
-          <DaysToNotice days={row.daysUntilNoticeDeadline} />
-        </DetailFact>
-        <DetailFact label="Value">
-          <MoneyValue value={row.agreementValue} currency={row.currency} />
-        </DetailFact>
-      </dl>
-
-      {finding && finding.extractedSignals.length > 0 ? (
-        <div className="border-b px-4 py-4">
-          <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Extracted signals
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {finding.extractedSignals.map(signal => (
-              <li key={signal} className="flex gap-2 text-sm leading-5 text-foreground">
-                <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-accent-foreground" />
-                {signal}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {guidance ? (
-        <div className="border-b px-4 py-4">
-          <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-accent-foreground">
-            Risk Review Agent
-          </p>
-          <p className="mt-2 text-sm leading-6 text-foreground">{guidance.judgment}</p>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {guidance.reasonForPriority}
-          </p>
-          <p className="mt-2 font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-            {formatSuggestedReviewer(guidance.suggestedReviewer)}
-          </p>
-        </div>
-      ) : null}
-
-      <DecisionPanel
-        row={row}
-        finding={finding}
-        selectedAction={selectedAction}
-        setSelectedAction={setSelectedAction}
-        notes={notes}
-        setNotes={setNotes}
-        decisionResult={decisionResult}
-        decisionError={decisionError}
-        decisionPending={decisionPending}
-        onSubmitDecision={onSubmitDecision}
-      />
-
-      <div className="flex flex-col gap-2 px-4 py-4">
-        <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Source record
-        </p>
-        <div className="font-data text-xs leading-5 text-muted-foreground">
-          {row.source.recordId ?? row.agreementId}
-          {row.source.toolName ? ` · ${row.source.toolName}` : ''}
-        </div>
-        {row.source.recordUrl ? (
-          <a
-            href={withDocusignUtmParams(row.source.recordUrl)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-foreground underline-offset-2 hover:underline"
-          >
-            Open in Docusign
-            <ExternalLink className="size-3" aria-hidden />
-          </a>
-        ) : null}
-        {missing.length > 0 ? <MissingFieldsChip fields={missing} /> : null}
-      </div>
-    </aside>
+    </div>
   );
 }
 
@@ -950,18 +1086,18 @@ function DecisionPanel({
     });
 
   return (
-    <div className="border-b px-4 py-4">
-      <p className="font-data text-[11px] font-medium uppercase tracking-[0.12em] text-accent-foreground">
+    <div className="rounded-xl border bg-card px-4 py-4">
+      <p className="font-data text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">
         Human approval
       </p>
       <p className="mt-2 text-sm leading-6 text-foreground">
         Approve the policy recommendation or override it before Workflow Builder acts.
       </p>
 
-      <label className="mt-3 grid gap-1.5 text-xs font-medium text-muted-foreground">
+      <label className="mt-3 grid gap-1.5 text-sm font-medium text-muted-foreground">
         Override action
         <select
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={selectedAction}
           onChange={event => setSelectedAction(event.target.value as FollowUpAction)}
         >
@@ -973,41 +1109,39 @@ function DecisionPanel({
         </select>
       </label>
 
-      <label className="mt-3 grid gap-1.5 text-xs font-medium text-muted-foreground">
+      <label className="mt-3 grid gap-1.5 text-sm font-medium text-muted-foreground">
         Reviewer notes
         <textarea
-          className="min-h-20 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-5 text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-24 resize-none rounded-lg border border-input bg-card px-3 py-2 text-sm leading-5 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={notes}
           onChange={event => setNotes(event.target.value)}
           placeholder="Add context for the request"
         />
       </label>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 flex items-center justify-between gap-2">
         <Button
-          disabled={decisionPending}
-          onClick={() => submit('approved', finding.recommendedAction)}
-          size="sm"
-        >
-          {decisionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-          Approve
-        </Button>
-        <Button
-          disabled={decisionPending}
-          onClick={() => submit('edited', selectedAction)}
-          size="sm"
-          variant="secondary"
-        >
-          <Send className="size-4" />
-          Override
-        </Button>
-        <Button
+          className="w-fit px-0 text-urgent hover:bg-transparent hover:text-urgent"
           disabled={decisionPending}
           onClick={() => submit('rejected', 'no_action')}
           size="sm"
-          variant="outline"
+          variant="ghost"
         >
           Reject
+        </Button>
+        <Button
+          className="rounded-lg"
+          disabled={decisionPending}
+          onClick={() =>
+            submit(
+              selectedAction === finding.recommendedAction ? 'approved' : 'edited',
+              selectedAction,
+            )
+          }
+          size="sm"
+        >
+          {decisionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+          Submit
         </Button>
       </div>
 
@@ -1024,12 +1158,12 @@ function DecisionPanel({
 
 function DecisionResultCard({ result }: { result: RenewalDecisionResult }) {
   return (
-    <div className="mt-4 rounded-md border bg-secondary px-3 py-3">
+    <div className="mt-4 rounded-xl border bg-secondary px-3 py-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-foreground">
           {formatActionLabel(result.followUpPlan.action)}
         </p>
-        <span className="rounded-full border border-border bg-card px-2 py-0.5 font-data text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="rounded-full border border-border bg-card px-2 py-0.5 font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground">
           {result.followUpPlan.status}
         </span>
       </div>
@@ -1065,17 +1199,28 @@ function DecisionResultCard({ result }: { result: RenewalDecisionResult }) {
 function DetailFact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="font-data text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+      <dt className="text-sm leading-6 text-muted-foreground">
         {label}
       </dt>
-      <dd className="m-0">{children}</dd>
+      <dd className="m-0 text-sm leading-6 text-foreground">{children}</dd>
     </div>
   );
 }
 
+function formatToolName(toolName: string) {
+  if (toolName === 'docusign_getAllAgreements') {
+    return 'Agreement discovery';
+  }
+
+  return toolName;
+}
+
 function NotReviewed() {
   return (
-    <span className="inline-flex items-center rounded-full border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+    <span
+      className="inline-flex items-center rounded-full border bg-accent px-2.5 py-1 text-xs font-medium text-muted-foreground"
+      style={{ borderColor: 'var(--muted-foreground)' }}
+    >
       Not reviewed
     </span>
   );
@@ -1088,25 +1233,28 @@ function RiskClassification({ finding }: { finding: RenewalRiskFinding }) {
     urgent: 'Urgent',
     blocked: 'Blocked',
   };
+  const borderColors: Record<RenewalRiskFinding['classification'], string> = {
+    standard: 'var(--live)',
+    needs_review: 'var(--caution)',
+    urgent: 'var(--urgent)',
+    blocked: 'var(--urgent)',
+  };
 
   return (
     <span
       className={cn(
-        'inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium',
-        finding.classification === 'standard' && 'border-live/30 bg-live-wash text-live',
-        finding.classification === 'needs_review' && 'border-caution/30 bg-caution-wash text-caution',
-        finding.classification === 'urgent' && 'border-urgent/30 bg-urgent-wash text-urgent',
-        finding.classification === 'blocked' && 'border-urgent/40 bg-urgent text-white',
+        'inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium',
+        finding.classification === 'standard' && 'bg-live-wash text-live',
+        finding.classification === 'needs_review' && 'bg-caution-wash text-caution',
+        finding.classification === 'urgent' && 'bg-urgent-wash text-urgent',
+        finding.classification === 'blocked' && 'bg-urgent-wash text-urgent',
       )}
+      style={{ borderColor: borderColors[finding.classification] }}
       title={finding.rationale}
     >
       {labels[finding.classification]}
     </span>
   );
-}
-
-function ActionValue({ action }: { action: RenewalRiskFinding['recommendedAction'] }) {
-  return <span className="whitespace-nowrap">{formatActionLabel(action)}</span>;
 }
 
 function formatActionLabel(action: FollowUpAction) {
@@ -1131,7 +1279,7 @@ function DataValue({ value }: { value: string | null }) {
     return <NotExtracted />;
   }
 
-  return <span className="whitespace-nowrap font-data text-[13px] tabular-nums">{value}</span>;
+  return <span className="whitespace-nowrap tabular-nums">{value}</span>;
 }
 
 function MoneyValue({ value, currency }: { value: number | null; currency: string }) {
@@ -1140,7 +1288,7 @@ function MoneyValue({ value, currency }: { value: number | null; currency: strin
   }
 
   return (
-    <span className="whitespace-nowrap font-data text-[13px] tabular-nums">
+    <span className="whitespace-nowrap tabular-nums">
       {new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: currency || 'USD',
@@ -1156,7 +1304,7 @@ function NoticePeriodValue({ noticePeriodDays }: { noticePeriodDays: number | nu
   }
 
   return (
-    <span className="whitespace-nowrap font-data text-[13px] tabular-nums">
+    <span className="whitespace-nowrap tabular-nums">
       {noticePeriodDays} days
     </span>
   );
@@ -1170,12 +1318,9 @@ function DaysToNotice({ days }: { days: number | null }) {
   return (
     <span
       className={cn(
-        'inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 font-data text-xs tabular-nums',
-        days <= 14
-          ? 'border-urgent/30 bg-urgent-wash text-urgent'
-          : days <= 30
-            ? 'border-caution/30 bg-caution-wash text-caution'
-            : 'border-border bg-secondary text-secondary-foreground',
+        'whitespace-nowrap tabular-nums',
+        days <= 14 && 'text-urgent',
+        days > 14 && days <= 30 && 'text-caution',
       )}
     >
       {formatDayCount(days)}
@@ -1196,35 +1341,11 @@ function RenewalTypeLabel({ value }: { value: RenewalAgreementTableRow['renewalT
     return <NotExtracted />;
   }
 
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span
-        aria-hidden
-        className={cn(
-          'size-1.5 rounded-full',
-          value === 'auto_renews' && 'bg-urgent',
-          value === 'evergreen' && 'bg-caution',
-          (value === 'manual_renewal' || value === 'none') && 'bg-input',
-        )}
-      />
-      {labels[value]}
-    </span>
-  );
-}
-
-function MissingFieldsChip({ fields }: { fields: string[] }) {
-  return (
-    <div
-      className="inline-flex whitespace-nowrap rounded-full border border-caution/30 bg-caution-wash px-2 py-0.5 text-xs text-caution"
-      title={`Missing fields: ${fields.join(', ')}`}
-    >
-      {fields.length} {fields.length === 1 ? 'field' : 'fields'} missing
-    </div>
-  );
+  return <span className="whitespace-nowrap">{labels[value]}</span>;
 }
 
 function NotExtracted() {
-  return <span className="text-sm text-muted-foreground">Not extracted</span>;
+  return <span>Not extracted</span>;
 }
 
 function formatDayCount(days: number) {
