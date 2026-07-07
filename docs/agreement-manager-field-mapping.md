@@ -72,7 +72,7 @@ queue outside this extraction contract.
 
 References:
 
-- Docusign IAM Toolkit overview: https://developers.docusign.com/iam-toolkit/
-- Configure agreement types and fields: https://developers.docusign.com/iam-toolkit/command-line/configure-agreement-types-and-fields/
-- Test agreement customizations: https://developers.docusign.com/iam-toolkit/command-line/test-agreement-customizations/
-- Bulk ingest agreements with metadata: https://developers.docusign.com/iam-toolkit/command-line/bulk-ingest-agreements/
+- Docusign IAM Toolkit overview: https://developers.docusign.com/iam-toolkit/?utm_campaign=AWA_FY27Q2&utm_medium=influencer-program&utm_source=Damian
+- Configure agreement types and fields: https://developers.docusign.com/iam-toolkit/command-line/configure-agreement-types-and-fields/?utm_campaign=AWA_FY27Q2&utm_medium=influencer-program&utm_source=Damian
+- Test agreement customizations: https://developers.docusign.com/iam-toolkit/command-line/test-agreement-customizations/?utm_campaign=AWA_FY27Q2&utm_medium=influencer-program&utm_source=Damian
+- Bulk ingest agreements with metadata: https://developers.docusign.com/iam-toolkit/command-line/bulk-ingest-agreements/?utm_campaign=AWA_FY27Q2&utm_medium=influencer-program&utm_source=Damian
