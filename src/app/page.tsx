@@ -595,6 +595,7 @@ function RiskReviewPanel({
   riskReview: NonNullable<RenewalReviewWorkflowResult['riskReview']>;
 }) {
   const supplierByAgreementId = new Map(rows.map(row => [row.agreementId, row.supplier]));
+  const rowByAgreementId = new Map(rows.map(row => [row.agreementId, row]));
   const findingByAgreementId = new Map(
     riskBrief?.findings.map(finding => [finding.agreementId, finding]) ?? [],
   );
@@ -616,14 +617,23 @@ function RiskReviewPanel({
               Review summary
             </p>
             <h2 className="mt-3 text-lg font-semibold leading-7 text-foreground">
-              2 agreements are overdue and need escalation today; 1 needs legal review before it proceeds.
+              {riskReview.portfolioJudgment}
             </h2>
           </div>
-          <ul className="grid gap-2 text-sm leading-6 text-foreground">
-            <li>Meridian Catering Services Inc. — 17 days overdue → escalate now</li>
-            <li>Atlas Calibration Labs Inc. — 5 days overdue, $50k+ → escalate now</li>
-            <li>Clearview Inventory Platform LLC — terms unclear, $50k+ auto-renew → send to legal</li>
-          </ul>
+          {displayedGuidance.length > 0 ? (
+            <ul className="grid gap-2 text-sm leading-6 text-foreground">
+              {displayedGuidance.map(guidance => {
+                const row = rowByAgreementId.get(guidance.agreementId);
+                const finding = findingByAgreementId.get(guidance.agreementId);
+
+                return (
+                  <li key={guidance.agreementId}>
+                    {formatPriorityActionSummary({ guidance, finding, row })}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
         <div className="border-t pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <p className="font-data text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -668,6 +678,92 @@ function formatSuggestedReviewer(
   };
 
   return labels[reviewer];
+}
+
+function formatPriorityActionSummary({
+  guidance,
+  finding,
+  row,
+}: {
+  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
+  finding: RenewalRiskFinding | undefined;
+  row: RenewalAgreementTableRow | undefined;
+}) {
+  const supplier = row?.supplier ?? finding?.supplierName ?? guidance.agreementId;
+  const reason = formatPriorityReason({ guidance, finding, row });
+  const action = formatPriorityAction(finding?.recommendedAction);
+
+  return `${supplier} — ${reason} → ${action}`;
+}
+
+function formatPriorityReason({
+  guidance,
+  finding,
+  row,
+}: {
+  guidance: NonNullable<RenewalReviewWorkflowResult['riskReview']>['reviewerGuidance'][number];
+  finding: RenewalRiskFinding | undefined;
+  row: RenewalAgreementTableRow | undefined;
+}) {
+  const parts: string[] = [];
+  const daysUntilNotice = finding?.daysUntilNoticeDeadline ?? row?.daysUntilNoticeDeadline;
+
+  if (typeof daysUntilNotice === 'number') {
+    parts.push(formatNoticeTiming(daysUntilNotice));
+  }
+
+  if (typeof row?.agreementValue === 'number') {
+    parts.push(formatCompactMoney(row.agreementValue, row.currency));
+  }
+
+  if (row?.renewalType === 'auto_renews') {
+    parts.push('auto-renew');
+  }
+
+  if (row?.source.missingFields.length) {
+    parts.push('missing fields');
+  }
+
+  return parts.length > 0 ? parts.join(', ') : guidance.reasonForPriority || guidance.judgment;
+}
+
+function formatNoticeTiming(daysUntilNotice: number) {
+  const absoluteDays = Math.abs(daysUntilNotice);
+  const unit = absoluteDays === 1 ? 'day' : 'days';
+
+  if (daysUntilNotice < 0) {
+    return `${absoluteDays} ${unit} overdue`;
+  }
+
+  if (daysUntilNotice === 0) {
+    return 'due today';
+  }
+
+  return `${daysUntilNotice} ${unit} to notice`;
+}
+
+function formatCompactMoney(value: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+    .format(value)
+    .replace('K', 'k');
+}
+
+function formatPriorityAction(action: FollowUpAction | undefined) {
+  const labels: Record<FollowUpAction, string> = {
+    no_action: 'no action',
+    owner_review: 'owner review',
+    legal_review: 'send to legal',
+    renegotiate: 'renegotiate',
+    prepare_cancellation_notice: 'prepare cancellation',
+    escalate_missed_deadline: 'escalate now',
+  };
+
+  return action ? labels[action] : 'review';
 }
 
 function AgreementList({
@@ -895,10 +991,13 @@ function RenewalDetailPanel({
               {guidance ? (
                 <>
                   <p className="mt-4 text-sm leading-6 text-foreground">
-                    Missed renewal/cancellation notice deadline by 5 days; escalate before any
-                    renewal action. Agreement value is ≥ $50k, so this attention from
-                    procurement/legal.
+                    {guidance.judgment}
                   </p>
+                  {guidance.reasonForPriority ? (
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                      {guidance.reasonForPriority}
+                    </p>
+                  ) : null}
                 </>
               ) : null}
 
@@ -1033,7 +1132,12 @@ function DecisionPanel({
         <Button
           className="rounded-lg"
           disabled={decisionPending}
-          onClick={() => submit('approved', selectedAction)}
+          onClick={() =>
+            submit(
+              selectedAction === finding.recommendedAction ? 'approved' : 'edited',
+              selectedAction,
+            )
+          }
           size="sm"
         >
           {decisionPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
