@@ -11,6 +11,21 @@ const DOCUSIGN_UTM_PARAMS = {
   utm_source: 'Damian',
 };
 
+const ISO_CURRENCY_CODE_PATTERN = /^[A-Za-z]{3}$/;
+
+/**
+ * Extracted agreement data can carry sentinel strings (e.g. "not_extracted")
+ * in a currency field instead of a real ISO 4217 code, which throws a
+ * RangeError from Intl.NumberFormat if used directly. Falls back to USD for
+ * anything that isn't a plausible 3-letter currency code.
+ */
+export function normalizeCurrencyCode(currency: string | null | undefined): string {
+  if (currency && ISO_CURRENCY_CODE_PATTERN.test(currency)) {
+    return currency.toUpperCase();
+  }
+  return 'USD';
+}
+
 export function withDocusignUtmParams(href: string) {
   try {
     const url = new URL(href);

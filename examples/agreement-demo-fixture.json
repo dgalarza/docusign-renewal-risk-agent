@@ -125,6 +125,31 @@
           "Renewal notice terms were not extracted."
         ]
       }
+    },
+    {
+      "file": "examples/agreements/cloudforge-analytics.md",
+      "scenario": "High-value auto-renewal with notice deadline within 30 days",
+      "agreement": {
+        "agreementId": "demo-cloudforge-006",
+        "supplierName": "CloudForge Analytics Inc.",
+        "agreementTitle": "Analytics Platform Subscription Agreement",
+        "agreementValue": 125000,
+        "currency": "USD",
+        "renewalType": "auto_renews",
+        "renewalDate": "2026-08-15",
+        "noticePeriodDays": 30,
+        "noticeDeadline": "2026-07-16"
+      },
+      "expectedFinding": {
+        "classification": "urgent",
+        "recommendedAction": "owner_review",
+        "daysUntilNoticeDeadline": 15,
+        "keyExtractionSignals": [
+          "Agreement auto-renews.",
+          "Agreement value is at or above 50000 USD.",
+          "Notice deadline is within 30 days."
+        ]
+      }
     }
   ]
 }

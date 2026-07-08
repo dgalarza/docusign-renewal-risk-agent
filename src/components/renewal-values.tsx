@@ -5,7 +5,7 @@ import type {
   RenewalRiskAgentGuidance,
   RenewalRiskFinding,
 } from '@/mastra/domain/schemas';
-import { cn } from '@/lib/utils';
+import { cn, normalizeCurrencyCode } from '@/lib/utils';
 
 export const FOLLOW_UP_ACTIONS = [
   'no_action',
@@ -114,7 +114,7 @@ export function MoneyValue({ value, currency }: { value: number | null; currency
     <span className="whitespace-nowrap tabular-nums">
       {new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: currency || 'USD',
+        currency: normalizeCurrencyCode(currency),
         maximumFractionDigits: 0,
       }).format(value)}
     </span>

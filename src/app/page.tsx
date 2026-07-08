@@ -32,7 +32,7 @@ import {
   RiskClassification,
   workflowBuilderStatusLabel,
 } from '@/components/renewal-values';
-import { cn } from '@/lib/utils';
+import { cn, normalizeCurrencyCode } from '@/lib/utils';
 
 type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
 
@@ -44,7 +44,7 @@ type UiStatus = RenewalReviewWorkflowResult['status'] | 'idle' | 'loading';
  */
 type DiscoverySource = 'docusign_mcp' | 'fixture';
 
-const DEFAULT_REVIEW_WINDOW_DAYS = 90;
+const DEFAULT_REVIEW_WINDOW_DAYS = 120;
 
 /**
  * Maps each streamed ledger event `kind` to a pipeline stage index so the
@@ -550,7 +550,7 @@ function SummaryStrip({
     (total, row) => total + (row.agreementValue ?? 0),
     0,
   );
-  const portfolioCurrency = valuedRows[0]?.currency || 'USD';
+  const portfolioCurrency = normalizeCurrencyCode(valuedRows[0]?.currency);
   const urgentOrBlocked =
     riskBrief?.findings.filter(
       finding => finding.classification === 'urgent' || finding.classification === 'blocked',

@@ -33,6 +33,8 @@ fields exist in the active sandbox. Do not commit the generated
 
 ## Notes
 
-`businessOwner` is optional metadata for this demo. The extraction model should
-not be expected to infer an internal owner from agreement text. Workflow routing
-can use a configured owner, review queue, or fixed demo recipient.
+The custom agreement type extracts only what the app's policy engine consumes:
+supplier name, agreement value, currency, renewal type, renewal date, notice
+period, and notice deadline. Business owner and termination-rights fields are
+intentionally out of scope for this demo — the app does not read them, so they
+are not defined here.

@@ -93,10 +93,10 @@ test('creates a fixture-backed risk brief', () => {
     },
   );
 
-  assert.equal(fixtureBrief.agreementsReviewed, 5);
+  assert.equal(fixtureBrief.agreementsReviewed, 6);
   assert.deepEqual(
     fixtureBrief.findings.map(finding => finding.classification),
-    ['needs_review', 'urgent', 'blocked', 'standard', 'needs_review'],
+    ['needs_review', 'urgent', 'blocked', 'standard', 'needs_review', 'urgent'],
   );
 });
 

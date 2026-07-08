@@ -8,6 +8,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const sourceDir = path.join(repoRoot, 'examples', 'agreements');
 const outputDir = path.join(sourceDir, 'dist');
+const testVariantsDir = path.join(sourceDir, 'test-variants');
+const iamTestDir = path.join(
+  repoRoot,
+  'docusign-iam',
+  'renewal-risk',
+  'agreement-manager',
+  'files',
+  'test',
+);
 
 const page = {
   margin: 54,
@@ -33,6 +42,8 @@ const main = async () => {
 
   await fs.rm(outputDir, { recursive: true, force: true });
   await fs.mkdir(outputDir, { recursive: true });
+  await fs.rm(iamTestDir, { recursive: true, force: true });
+  await fs.mkdir(iamTestDir, { recursive: true });
 
   const generated = [];
 
@@ -40,6 +51,28 @@ const main = async () => {
     const sourcePath = path.join(sourceDir, sourceName);
     const outputName = `${path.basename(sourceName, '.md')}.pdf`;
     const outputPath = path.join(outputDir, outputName);
+    const markdown = await fs.readFile(sourcePath, 'utf8');
+
+    await renderAgreementPdf(markdown, outputPath);
+    generated.push(path.relative(repoRoot, outputPath));
+  }
+
+  // IAM Toolkit rejects test-set ingestion as a duplicate whenever the
+  // extracted content matches an already-ingested training document, so the
+  // test set is a genuinely different (held-out) batch of fictional
+  // agreements, not copies of the training set. See
+  // examples/agreements/test-variants/README.md.
+  const testEntries = await fs.readdir(testVariantsDir, { withFileTypes: true });
+  const testSources = testEntries
+    .filter(entry => entry.isFile())
+    .map(entry => entry.name)
+    .filter(name => name.endsWith('.md') && name !== 'README.md')
+    .sort();
+
+  for (const sourceName of testSources) {
+    const sourcePath = path.join(testVariantsDir, sourceName);
+    const outputName = `${path.basename(sourceName, '.md')}.pdf`;
+    const outputPath = path.join(iamTestDir, outputName);
     const markdown = await fs.readFile(sourcePath, 'utf8');
 
     await renderAgreementPdf(markdown, outputPath);
@@ -56,7 +89,7 @@ const main = async () => {
   }
 };
 
-const renderAgreementPdf = (markdown, outputPath) =>
+const renderAgreementPdf = (markdown, outputPath, infoOverrides = {}) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
@@ -68,6 +101,7 @@ const renderAgreementPdf = (markdown, outputPath) =>
         Keywords: 'fictional, supplier agreement, renewal risk',
         CreationDate: new Date('2026-07-01T00:00:00.000Z'),
         ModDate: new Date('2026-07-01T00:00:00.000Z'),
+        ...infoOverrides,
       },
     });
 

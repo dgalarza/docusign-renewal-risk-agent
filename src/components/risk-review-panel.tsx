@@ -9,6 +9,7 @@ import {
   formatSuggestedReviewer,
   RiskClassification,
 } from '@/components/renewal-values';
+import { normalizeCurrencyCode } from '@/lib/utils';
 
 export function RiskReviewPanel({
   rows,
@@ -157,7 +158,7 @@ function formatNoticeTiming(daysUntilNotice: number) {
 function formatCompactMoney(value: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: currency || 'USD',
+    currency: normalizeCurrencyCode(currency),
     notation: 'compact',
     maximumFractionDigits: 1,
   })

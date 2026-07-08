@@ -7,7 +7,7 @@
     {
       "key": "C_SupplierRenewalAgreement",
       "displayName": "Supplier Renewal Agreement",
-      "description": "Completed supplier agreement reviewed for renewal risk, notice deadlines, agreement value, and termination rights.",
+      "description": "Completed supplier agreement reviewed for renewal risk, notice deadlines, and agreement value.",
       "aiDefinition": "A supplier, vendor, services, subscription, maintenance, catering, calibration, office supply, or software agreement that may renew, auto-renew, expire, or require advance notice before renewal.",
       "category": "BusinessServices",
       "customExtractionEnabled": true,
@@ -17,8 +17,7 @@
           "Status",
           "Renewal",
           "Annual Contract Value",
-          "Total Contract Value",
-          "Termination for Convenience - Notice Period"
+          "Total Contract Value"
         ],
         "customFields": [
           "Demo Supplier Name",
@@ -27,16 +26,14 @@
           "Demo Renewal Type",
           "Demo Renewal Date",
           "Demo Notice Period Days",
-          "Demo Notice Deadline",
-          "Demo Termination for Convenience Available",
-          "Demo Termination Fee",
-          "Demo Business Owner Name"
+          "Demo Notice Deadline"
         ]
       },
       "docs": [
         "atlas-calibration-labs.pdf",
         "brightline-office-supplies.pdf",
         "clearview-inventory-platform.pdf",
+        "cloudforge-analytics.pdf",
         "meridian-catering-services.pdf",
         "northstar-maintenance-group.pdf"
       ]
@@ -227,72 +224,6 @@
           }
         ]
       }
-    },
-    {
-      "key": "C_TerminationForConvenienceAvailable",
-      "displayName": "Demo Termination for Convenience Available",
-      "category": "TerminationCategory",
-      "fieldType": "Dropdown",
-      "customExtractionEnabled": true,
-      "aiDefinition": "Whether the buyer or customer can terminate the agreement for convenience, without needing vendor breach or cause.",
-      "dropdownOptions": [
-        {
-          "name": "Yes"
-        },
-        {
-          "name": "No"
-        },
-        {
-          "name": "Not stated"
-        }
-      ],
-      "examples": {
-        "en": [
-          {
-            "exampleText": "Customer may terminate this Agreement for convenience upon 30 days prior written notice.",
-            "confirmedValue": "Yes"
-          },
-          {
-            "exampleText": "Customer may not terminate this Agreement for convenience during the committed term.",
-            "confirmedValue": "No"
-          },
-          {
-            "exampleText": "Termination rights are limited to uncured material breach by either party.",
-            "confirmedValue": "No"
-          }
-        ]
-      }
-    },
-    {
-      "key": "C_TerminationFee",
-      "displayName": "Demo Termination Fee",
-      "category": "TerminationCategory",
-      "fieldType": "String",
-      "customExtractionEnabled": true,
-      "aiDefinition": "Any fee, penalty, remaining charge, or financial consequence that applies if the buyer terminates or cancels the agreement before the end of the term.",
-      "examples": {
-        "en": [
-          {
-            "exampleText": "Early termination requires payment of the remaining fees due for the current term.",
-            "confirmedValue": "Remaining fees due for the current term"
-          },
-          {
-            "exampleText": "There is no termination fee after the current term.",
-            "confirmedValue": "None after current term"
-          },
-          {
-            "exampleText": "Termination for convenience is not available.",
-            "confirmedValue": "Termination for convenience is not available"
-          }
-        ]
-      }
-    },
-    {
-      "key": "C_DemoBusinessOwnerName",
-      "displayName": "Demo Business Owner Name",
-      "category": "OtherCategory",
-      "fieldType": "String",
-      "customExtractionEnabled": false
     }
   ],
   "metadata": {
