@@ -9,9 +9,9 @@ const repoRoot = path.resolve(__dirname, '..');
 const sourceDir = path.join(repoRoot, 'examples', 'agreements');
 const outputDir = path.join(sourceDir, 'dist');
 const testVariantsDir = path.join(sourceDir, 'test-variants');
-const iamTestDir = path.join(
+const cliTestDir = path.join(
   repoRoot,
-  'docusign-iam',
+  'docusign-cli',
   'renewal-risk',
   'agreement-manager',
   'files',
@@ -42,8 +42,8 @@ const main = async () => {
 
   await fs.rm(outputDir, { recursive: true, force: true });
   await fs.mkdir(outputDir, { recursive: true });
-  await fs.rm(iamTestDir, { recursive: true, force: true });
-  await fs.mkdir(iamTestDir, { recursive: true });
+  await fs.rm(cliTestDir, { recursive: true, force: true });
+  await fs.mkdir(cliTestDir, { recursive: true });
 
   const generated = [];
 
@@ -57,7 +57,7 @@ const main = async () => {
     generated.push(path.relative(repoRoot, outputPath));
   }
 
-  // IAM Toolkit rejects test-set ingestion as a duplicate whenever the
+  // Docusign CLI rejects test-set ingestion as a duplicate whenever the
   // extracted content matches an already-ingested training document, so the
   // test set is a genuinely different (held-out) batch of fictional
   // agreements, not copies of the training set. See
@@ -72,7 +72,7 @@ const main = async () => {
   for (const sourceName of testSources) {
     const sourcePath = path.join(testVariantsDir, sourceName);
     const outputName = `${path.basename(sourceName, '.md')}.pdf`;
-    const outputPath = path.join(iamTestDir, outputName);
+    const outputPath = path.join(cliTestDir, outputName);
     const markdown = await fs.readFile(sourcePath, 'utf8');
 
     await renderAgreementPdf(markdown, outputPath);

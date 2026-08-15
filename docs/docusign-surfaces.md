@@ -4,9 +4,9 @@
 
 Agreement Manager is the source of completed supplier agreements and extracted agreement intelligence. This demo should not position Agreement Manager as the place where unsigned draft agreements first land for approval.
 
-## IAM Toolkit
+## Docusign CLI
 
-IAM Toolkit belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `renewal_date`, `notice_period_days`, and `notice_deadline`.
+Docusign CLI belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `renewal_date`, `notice_period_days`, and `notice_deadline`. Install it from the `@docusign/agreement-cli` npm package and authenticate with `ds auth login`, which uses PKCE. CLI authentication is separate from the app's `npm run auth:docusign` Docusign MCP OAuth helper.
 
 ## MCP
 

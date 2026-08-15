@@ -1,6 +1,6 @@
-# Agreement Manager IAM Setup
+# Agreement Manager Setup with Docusign CLI
 
-This directory contains the Docusign IAM Toolkit setup for the renewal-risk demo.
+This directory contains the Docusign CLI setup for the renewal-risk demo.
 It defines the `Supplier Renewal Agreement` custom agreement type, the demo
 extraction fields, and the fictional PDFs used for training and testing.
 
@@ -17,7 +17,11 @@ scaffold files are intentionally ignored by git.
 
 ## Commands
 
-Run commands from `docusign-iam/renewal-risk`.
+Install Docusign CLI from the `@docusign/agreement-cli` npm package. Authenticate
+the CLI with `ds auth login`, which uses PKCE and is separate from the app's
+`npm run auth:docusign` Docusign MCP OAuth helper.
+
+Run commands from `docusign-cli/renewal-risk`.
 
 ```bash
 ds agm validate

@@ -2,7 +2,7 @@
 
 These fields represent the Agreement Manager data contract for the demo. See
 `docs/agreement-manager-field-mapping.md` for normalized schema mapping,
-derivation rules, missing-data behavior, and IAM Toolkit setup notes.
+derivation rules, missing-data behavior, and Docusign CLI setup notes.
 
 | Field | Type | Purpose | Demo source |
 | --- | --- | --- | --- |

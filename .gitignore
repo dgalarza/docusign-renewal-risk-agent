@@ -16,12 +16,12 @@ tsconfig.tsbuildinfo
 .netlify
 .vercel
 
-# Docusign IAM Toolkit local/generated state
-docusign-iam/.env
-docusign-iam/.claude/
-docusign-iam/.cursor/
-docusign-iam/.gemini/
-docusign-iam/.github/
-docusign-iam/**/agreement-manager/configs/custom-catalog.json
-docusign-iam/**/agreement-manager/configs/standard-catalog.json
-docusign-iam/**/agreement-manager/tests/tracking*.json
+# Docusign CLI local/generated state
+docusign-cli/.env
+docusign-cli/.claude/
+docusign-cli/.cursor/
+docusign-cli/.gemini/
+docusign-cli/.github/
+docusign-cli/**/agreement-manager/configs/custom-catalog.json
+docusign-cli/**/agreement-manager/configs/standard-catalog.json
+docusign-cli/**/agreement-manager/tests/tracking*.json
