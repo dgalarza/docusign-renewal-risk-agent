@@ -11,7 +11,7 @@ Working concept:
 The project starts from completed supplier agreements, not draft agreement intake.
 
 1. Completed supplier agreements live in Docusign Agreement Manager.
-2. IAM Toolkit defines and tests custom extraction fields for renewal-risk analysis.
+2. Docusign CLI defines and tests custom extraction fields for renewal-risk analysis.
 3. Agreement Manager extracts renewal terms and related structured fields.
 4. A custom agent finds supplier agreements renewing inside the review window.
 5. The workflow creates a deterministic policy brief, then invokes the
@@ -25,7 +25,7 @@ The project starts from completed supplier agreements, not draft agreement intak
 | Surface | Role |
 | --- | --- |
 | Agreement Manager | Source of completed agreements and extracted renewal terms. |
-| IAM Toolkit | Defines, tests, and promotes custom extraction fields. |
+| Docusign CLI | Defines, tests, and promotes custom extraction fields. |
 | MCP | Gives external agents access to Docusign agreement data and supported actions. |
 | Agreement Manager API | Deterministic API access to agreement records and extracted fields. |
 | Workflow Builder | Runs the approved follow-up after human review: owner review, legal review, renegotiation, cancellation notice, or missed-deadline escalation. |
@@ -37,9 +37,9 @@ The project starts from completed supplier agreements, not draft agreement intak
 docs/         Concept, architecture, and Docusign surface notes.
 examples/     Sample completed supplier agreement portfolio and fixture.
 scripts/      Docusign OAuth helper, MCP inspector/runner, agreement PDF builder.
-docusign-iam/ IAM Toolkit project that provisions the Agreement Manager custom
-              agreement type and extraction fields in the sandbox — see
-              docusign-iam/renewal-risk/README.md.
+docusign-cli/ Docusign CLI workspace that provisions the Agreement Manager
+              custom agreement type and extraction fields in the sandbox — see
+              docusign-cli/renewal-risk/README.md.
 src/app/      Next.js preview app and API routes (discovery, stream, decisions).
 src/mastra/   Domain schemas, agents, tools, MCP client, and workflows.
 ```
@@ -60,8 +60,8 @@ To learn the codebase, read in this order:
 8. `src/app/api/renewals/decisions/route.ts` and
    `src/mastra/tools/workflow-builder-tools.ts` — human approval and the
    Workflow Builder handoff.
-9. `docs/agreement-manager-field-mapping.md` plus `docusign-iam/` — the
-   extraction-field contract and the IAM Toolkit project that provisions it.
+9. `docs/agreement-manager-field-mapping.md` plus `docusign-cli/` — the
+   extraction-field contract and the Docusign CLI workspace that provisions it.
 
 ## Getting Started
 
@@ -118,7 +118,12 @@ focused on the top findings so the local demo stays legible.
 
 The expected Agreement Manager field contract is documented in
 `docs/agreement-manager-field-mapping.md`. Use that document when configuring
-IAM Toolkit custom fields or diagnosing `Not extracted` values in the preview.
+Docusign CLI custom fields or diagnosing `Not extracted` values in the preview.
+
+Install Docusign CLI from the `@docusign/agreement-cli` npm package and
+authenticate its local session with `ds auth login`, which uses PKCE. That CLI
+authentication is separate from the app's Docusign MCP OAuth helper:
+`npm run auth:docusign`.
 
 1. Copy `.env.example` to `.env` and fill in the local Docusign sandbox values.
    Do not commit `.env`, access tokens, refresh tokens, client secrets, or
