@@ -6,7 +6,7 @@ Agreement Manager is the source of completed supplier agreements and extracted a
 
 ## Docusign CLI
 
-Docusign CLI belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `renewal_date`, `notice_period_days`, and `notice_deadline`. Install it from the `@docusign/agreement-cli` npm package and authenticate with `ds auth login`, which uses PKCE. CLI authentication is separate from the app's `npm run auth:docusign` Docusign MCP OAuth helper.
+Docusign CLI belongs in the setup and extraction workflow. It defines and tests custom agreement types and fields such as `renewal_type`, `renewal_date`, `notice_period_days`, and `notice_deadline`. Install it from the `@docusign/cli` npm package (`npm install -g @docusign/cli`) and authenticate with `ds auth login`, which uses PKCE. CLI authentication is separate from the app's `npm run auth:docusign` Docusign MCP OAuth helper.
 
 ## MCP
 

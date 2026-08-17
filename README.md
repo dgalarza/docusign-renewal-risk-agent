@@ -113,17 +113,27 @@ credentials.
 The preview path calls Docusign MCP and labels the table source as
 `Docusign MCP`. MCP errors and missing Docusign fields are shown directly; the
 fixture mode above is a local/demo command for repeatable risk-review runs.
-The preview defaults to a 90-day review window and keeps the Risk Review Agent
-focused on the top findings so the local demo stays legible.
+The preview UI sends a 120-day review window (`DEFAULT_REVIEW_WINDOW_DAYS` in
+`src/app/page.tsx`); the `inspect:mcp fixture` and `inspect:mcp discover` CLI
+commands default to 90 days unless you pass a third argument. Both keep the
+Risk Review Agent focused on the top findings so the local demo stays legible.
 
 The expected Agreement Manager field contract is documented in
 `docs/agreement-manager-field-mapping.md`. Use that document when configuring
 Docusign CLI custom fields or diagnosing `Not extracted` values in the preview.
 
-Install Docusign CLI from the `@docusign/agreement-cli` npm package and
-authenticate its local session with `ds auth login`, which uses PKCE. That CLI
-authentication is separate from the app's Docusign MCP OAuth helper:
-`npm run auth:docusign`.
+Install Docusign CLI from the `@docusign/cli` npm package
+(`npm install -g @docusign/cli`) and authenticate its local session with
+`ds auth login`, which uses PKCE. That CLI authentication is separate from the
+app's Docusign MCP OAuth helper: `npm run auth:docusign`.
+
+**Sandbox setup.** The live path only returns rows if the sandbox Agreement
+Manager contains the demo agreements. From `docusign-cli/renewal-risk/`, run
+`ds agm ingest --directory agreement-manager/files/train` to ingest the six
+demo PDFs (see `docusign-cli/renewal-risk/agreement-manager/README.md`). The
+Intake Agent queries Agreement Manager with `status: COMPLETE` and
+`review_status: PENDING`, so any agreement marked Reviewed in the Agreement
+Manager UI is excluded from the demo run.
 
 1. Copy `.env.example` to `.env` and fill in the local Docusign sandbox values.
    Do not commit `.env`, access tokens, refresh tokens, client secrets, or
