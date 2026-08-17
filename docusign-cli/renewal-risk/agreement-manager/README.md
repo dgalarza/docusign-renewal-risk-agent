@@ -17,19 +17,27 @@ scaffold files are intentionally ignored by git.
 
 ## Commands
 
-Install Docusign CLI from the `@docusign/agreement-cli` npm package. Authenticate
-the CLI with `ds auth login`, which uses PKCE and is separate from the app's
-`npm run auth:docusign` Docusign MCP OAuth helper.
+Install Docusign CLI from the `@docusign/cli` npm package
+(`npm install -g @docusign/cli`). Authenticate the CLI with `ds auth login`,
+which uses PKCE and is separate from the app's `npm run auth:docusign` Docusign
+MCP OAuth helper. When no local browser is available (for example over SSH),
+`ds auth login --no-browser` prints the login URL and asks you to paste the
+redirect URL back.
 
 Run commands from `docusign-cli/renewal-risk`.
 
 ```bash
 ds agm validate
 ds agm upload
+ds agm ingest --directory agreement-manager/files/train
 ds agm get catalog
 ds agm test generate-test-template --output agreement-manager/tests/testing.csv
 ds agm test run
 ```
+
+`ds agm ingest` puts the six demo agreements into the sandbox Agreement Manager
+so the app's Intake Agent has something to discover (use `--files <pdf ...>`
+instead of `--directory` to ingest specific PDFs).
 
 Use `ds agm get catalog` after upload to confirm the custom agreement type and
 fields exist in the active sandbox. Do not commit the generated

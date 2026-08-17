@@ -62,7 +62,8 @@ hand.
 
 Suggested sandbox workflow:
 
-1. Install Docusign CLI from the `@docusign/agreement-cli` npm package.
+1. Install Docusign CLI from the `@docusign/cli` npm package
+   (`npm install -g @docusign/cli`).
 2. Authenticate the CLI with `ds auth login`, which uses PKCE.
 3. Retrieve the current Agreement Manager catalog with `ds agm get catalog`.
 4. Add the renewal-risk fields to the Agreement Manager manifest.
