@@ -31,7 +31,10 @@ export const supplierRenewalAgreementSchema = z.object({
     .number()
     .nullable()
     .describe('Annual or renewal value as a plain number; null when not extracted.'),
-  currency: z.string(),
+  currency: z
+    .string()
+    .nullable()
+    .describe('ISO currency code; null when not extracted. Never guess a default currency.'),
   renewalType: renewalTypeSchema,
   renewalDate: z
     .string()
@@ -60,6 +63,18 @@ export const renewalAgreementSourceSchema = z.object({
     .describe(
       'Table fields the source could not provide. Missing data is surfaced as an extraction gap, never invented — the policy engine routes rows with missing renewal terms to needs_review.',
     ),
+  reconciledFields: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Table fields that were null/not_extracted from the Intake Agent and were deterministically filled in from the Agreement Manager record (the Intake Agent had no value for the field).',
+    ),
+  overriddenFields: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Table fields where the Intake Agent returned a value but the Agreement Manager record (fetched via docusign_getAgreementDetails) disagreed and won — the record is always authoritative when it has a value.',
+    ),
 });
 
 export const renewalAgreementTableRowSchema = z.object({
@@ -74,7 +89,10 @@ export const renewalAgreementTableRowSchema = z.object({
     .nullable()
     .describe('Days from asOfDate to noticeDeadline; negative when the deadline has passed.'),
   agreementValue: z.number().nullable(),
-  currency: z.string(),
+  currency: z
+    .string()
+    .nullable()
+    .describe('ISO currency code; null when not extracted. Never guess a default currency.'),
   renewalType: renewalTypeSchema,
   source: renewalAgreementSourceSchema,
   noticeDeadlineDerived: z

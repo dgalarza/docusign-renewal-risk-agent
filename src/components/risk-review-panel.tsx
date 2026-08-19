@@ -155,7 +155,7 @@ function formatNoticeTiming(daysUntilNotice: number) {
   return `${daysUntilNotice} ${unit} to notice`;
 }
 
-function formatCompactMoney(value: number, currency: string) {
+function formatCompactMoney(value: number, currency: string | null) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: normalizeCurrencyCode(currency),

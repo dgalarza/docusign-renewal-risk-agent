@@ -54,7 +54,9 @@ export const classifyRenewalRisk = (
   }
 
   if (isHighValue) {
-    extractedSignals.push(`Agreement value is at or above ${HIGH_VALUE_THRESHOLD} ${agreement.currency}.`);
+    extractedSignals.push(
+      `Agreement value is at or above ${HIGH_VALUE_THRESHOLD} ${agreement.currency ?? '(currency not extracted)'}.`,
+    );
   }
 
   if (agreement.agreementValue === null && renewalRiskPresent) {

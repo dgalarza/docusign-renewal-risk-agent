@@ -128,7 +128,7 @@ export function NoticeDeadlineValue({
   );
 }
 
-export function MoneyValue({ value, currency }: { value: number | null; currency: string }) {
+export function MoneyValue({ value, currency }: { value: number | null; currency: string | null }) {
   if (typeof value !== 'number') {
     return <NotExtracted />;
   }
