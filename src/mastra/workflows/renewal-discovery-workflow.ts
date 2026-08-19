@@ -20,6 +20,7 @@ import {
 } from '../domain/schemas';
 import {
   createRenewalRiskBrief,
+  enrichRowsWithDerivedNoticeDeadlines,
   mapRenewalRowsToAgreements,
 } from '../tools/portfolio-tools';
 
@@ -178,6 +179,7 @@ const riskReviewStep = createStep({
     const agreements = mapRenewalRowsToAgreements(inputData.rows);
     let riskBrief: RenewalReviewWorkflowResult['riskBrief'] = null;
     let riskReview: RenewalRiskAgentJudgment | null = null;
+    let rows = inputData.rows;
 
     if (agreements.length > 0) {
       emitProgress({
@@ -230,10 +232,13 @@ const riskReviewStep = createStep({
             return null;
           })) ?? riskReview;
       }
+
+      rows = enrichRowsWithDerivedNoticeDeadlines(inputData.rows, agreements, riskBrief);
     }
 
     const result = renewalReviewWorkflowResultSchema.parse({
       ...inputData,
+      rows,
       message: riskBrief
         ? `${inputData.message} Risk review classified ${riskBrief.agreementsReviewed} agreement ${riskBrief.agreementsReviewed === 1 ? 'finding' : 'findings'}.`
         : `${inputData.message} Risk review found no agreements to classify.`,

@@ -77,6 +77,13 @@ export const renewalAgreementTableRowSchema = z.object({
   currency: z.string(),
   renewalType: renewalTypeSchema,
   source: renewalAgreementSourceSchema,
+  noticeDeadlineDerived: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      'True when noticeDeadline was not extracted directly and was instead derived as renewalDate minus noticePeriodDays.',
+    ),
 });
 
 export const renewalDiscoveryStatusSchema = z

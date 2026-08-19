@@ -28,6 +28,7 @@ import {
   DataValue,
   formatActionLabel,
   MoneyValue,
+  NoticeDeadlineValue,
   NotReviewed,
   RiskClassification,
   workflowBuilderStatusLabel,
@@ -738,7 +739,7 @@ function AgreementSummaryRow({
         <span className="mb-1 block font-data text-[0.62rem] uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
           Notice deadline
         </span>
-        <DataValue value={row.noticeDeadline} />
+        <NoticeDeadlineValue value={row.noticeDeadline} derived={row.noticeDeadlineDerived} />
       </div>
       <span className="hidden items-center justify-center self-center text-muted-foreground sm:flex">
         <Chevron className="size-4" aria-hidden />

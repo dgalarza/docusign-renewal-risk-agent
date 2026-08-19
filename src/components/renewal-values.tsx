@@ -105,6 +105,29 @@ export function DataValue({ value }: { value: string | null }) {
   return <span className="whitespace-nowrap tabular-nums">{value}</span>;
 }
 
+export function NoticeDeadlineValue({
+  value,
+  derived,
+}: {
+  value: string | null;
+  derived?: boolean;
+}) {
+  if (!value) {
+    return <NotExtracted />;
+  }
+
+  return (
+    <span className="whitespace-nowrap tabular-nums">
+      {value}
+      {derived ? (
+        <span className="ml-1 font-data text-[0.68rem] normal-case text-muted-foreground">
+          · derived
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function MoneyValue({ value, currency }: { value: number | null; currency: string }) {
   if (typeof value !== 'number') {
     return <NotExtracted />;

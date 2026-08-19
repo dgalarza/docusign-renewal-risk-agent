@@ -79,6 +79,7 @@ test('reports Workflow Builder as not configured without env', async () => {
           recordId: finding.agreementId,
           missingFields: ['renewalDate', 'noticePeriodDays', 'noticeDeadline'],
         },
+        noticeDeadlineDerived: false,
       },
       finding,
       decision: approvedDecision,
