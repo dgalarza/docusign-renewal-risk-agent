@@ -52,6 +52,7 @@ export type AgreementRecordCustomProvisions = {
   c_RenewalType?: string | null;
   c_RenewalDate?: string | null;
   c_NoticePeriodDays?: number | null;
+  c_NoticeDeadline?: string | null;
   c_AgreementValue?: number | null;
   c_Currency?: string | null;
   c_SupplierName?: string | null;
@@ -73,6 +74,13 @@ export type ReconciledAgreementFields = {
   currency: string | null;
   supplier: string | null;
   agreementTitle: string | null;
+  // The ONLY acceptable source for this field. Never derived from
+  // provisions.renewal_notice_date (a raw extraction field for the *current*
+  // term's notice date, not the demo's renewalDate-minus-noticePeriodDays
+  // deadline) and never from provisions.expiration_date. When Agreement
+  // Manager has not extracted a direct deadline, this is null so the
+  // deterministic derivation in portfolio-tools.ts applies.
+  noticeDeadline: string | null;
 };
 
 export const mapAgreementRecordToReconciledFields = (
@@ -104,6 +112,7 @@ export const mapAgreementRecordToReconciledFields = (
       normalizeString(customProvisions.c_SupplierName) ??
       pickCounterpartyName(record.parties, buyerPartyName),
     agreementTitle: normalizeString(record.title),
+    noticeDeadline: normalizeDateOnly(customProvisions.c_NoticeDeadline),
   };
 };
 
@@ -145,11 +154,28 @@ const normalizeDateOnly = (value: string | null | undefined): string | null => {
   return match ? match[1] : null;
 };
 
+const NOT_EXTRACTED_SENTINEL = 'not extracted';
+
 const normalizeNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-const normalizeString = (value: unknown): string | null =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+// Defensive: a raw Agreement Manager field should never literally contain the
+// UI sentinel text "Not extracted", but if one ever does (or an upstream
+// normalization bug leaks it back in), treat it as no value rather than a
+// real string.
+const normalizeString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0 || trimmed.toLowerCase() === NOT_EXTRACTED_SENTINEL) {
+    return null;
+  }
+
+  return trimmed;
+};
 
 const pickCounterpartyName = (
   parties: AgreementRecordParty[] | null | undefined,

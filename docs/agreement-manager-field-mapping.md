@@ -14,7 +14,7 @@ surface missing extraction data instead of inventing values.
 | `supplier_name` | `supplierName` / `supplier` | string | Yes | Extracted party or agreement metadata | `Brightline Office Supplies LLC` | Show `Not extracted`; add `supplier` to `source.missingFields`. |
 | `agreement_title` | `agreementTitle` | string | Yes | Agreement metadata | `Workplace Supplies Subscription Agreement` | Show `Not extracted`; add `agreementTitle` to `source.missingFields`. |
 | `agreement_value` | `agreementValue` | number | Yes | Extracted commercial term or metadata | `82000` | Use `null`; add `agreementValue` to `source.missingFields`; the `$50k` rule cannot be evaluated. |
-| `currency` | `currency` | string | Yes | Extracted commercial term or metadata | `USD` | Use `USD` only when the account/demo default is known; otherwise add `currency` to `source.missingFields`. |
+| `currency` | `currency` | string or `null` | Yes | Extracted commercial term or metadata | `USD` | Use `null`; add `currency` to `source.missingFields`. Never guess a default currency, and never write the literal string `"Not extracted"` into this field — it is nullable specifically so missing currency doesn't need a text sentinel. |
 | `renewal_type` | `renewalType` | enum | Yes | Extracted renewal provision | `auto_renews` | Use `not_extracted`; add `renewalType` to `source.missingFields`. |
 | `renewal_date` | `renewalDate` | ISO date string or `null` | Yes | Extracted renewal provision | `2026-10-15` | Use `null`; add `renewalDate` to `source.missingFields`; classify as needs review once policy runs. |
 | `notice_period_days` | `noticePeriodDays` | number or `null` | Yes | Extracted renewal provision | `60` | Use `null`; add `noticePeriodDays` to `source.missingFields`; `noticeDeadline` cannot be derived. |
@@ -56,25 +56,50 @@ Intake Agent step and before risk review (`src/mastra/tools/agreement-reconcilia
 For every row the Intake Agent returned (bounded to 25 rows per run), the
 workflow calls `docusign_getAgreementDetails` directly from the MCP tool map
 — outside any agent, the same pattern `workflow-builder-tools.ts` uses for
-the Workflow Builder handoff — and fills in any of `renewalType`,
-`renewalDate`, `noticePeriodDays`, `agreementValue`, `currency`, `supplier`,
-and `agreementTitle` that is still `null`/`"not_extracted"`/`"Not extracted"`.
+the Workflow Builder handoff — and reconciles `renewalType`, `renewalDate`,
+`noticePeriodDays`, `agreementValue`, `currency`, `supplier`,
+`agreementTitle`, and `noticeDeadline` against it.
+
+**The record wins.** This is not a fill-only backstop: whenever the
+Agreement Manager record has a value for a field, that value replaces
+whatever the Intake Agent returned, even if the agent's value looked valid.
+The agent's value is kept only when the record has no value for that field.
+This matters because the Intake Agent is an LLM and has been observed
+returning plausible-looking but wrong data, not just `null`/`"not_extracted"`
+— for example, computing `noticeDeadline` from
+`provisions.renewal_notice_date` (the current term's notice date, not the
+deadline the demo needs) instead of leaving it for the deterministic
+derivation, or writing the literal string `"Not extracted"` into `currency`
+instead of using `null`.
+
+`noticeDeadline` gets the strictest rule: the *only* acceptable source is a
+direct `custom_provisions.c_NoticeDeadline` field. If the record doesn't have
+one, `noticeDeadline` is forced to `null` regardless of what the agent
+returned — never derived from `provisions.renewal_notice_date` or
+`provisions.expiration_date` by the reconciliation step itself. That null
+then flows into the existing deterministic derivation
+(`renewalDate` minus `noticePeriodDays`) later in the workflow, which is
+what should render with the "· derived" badge in the UI.
+
 The mapping itself lives in `src/mastra/tools/agreement-record-mapper.ts`, a
 pure, unit-tested function that reads `custom_provisions` (the `c_`-prefixed
 extraction fields) first and falls back to `provisions` — the same
-precedence documented above. `noticeDeadline` is intentionally excluded from
-reconciliation: it is never read from `provisions.renewal_notice_date`, only
-derived from `renewalDate` minus `noticePeriodDays` (or taken from a direct
-`c_NoticeDeadline` field if Agreement Manager ever extracts one).
+precedence documented above. It also defensively coerces a literal
+`"Not extracted"` string found in a raw record field to `null`/no-value, so
+that sentinel can never leak into a field it reconciles.
 
-Reconciled rows record which fields changed in `row.source.reconciledFields`,
-and those fields are removed from `row.source.missingFields`. The run ledger
-shows one summary event per run, e.g. "Reconciled 8 rows against Agreement
-Manager records", so the correction is visible in the UI, not just in the
-data. If a `docusign_getAgreementDetails` call fails for a row, that row is
-left as the Intake Agent returned it and the run continues — reconciliation
-is a backstop, not a hard dependency. Fixture-mode runs never call MCP and
-are unaffected by this step.
+Reconciled rows record which fields changed and how in
+`row.source.reconciledFields` (the agent had no value; the record filled it)
+and `row.source.overriddenFields` (the agent had a value; the record
+disagreed and won), and those fields are removed from
+`row.source.missingFields` when the record supplied a real value. The run
+ledger shows one summary event per run breaking down both counts, e.g.
+"Reconciled 8 rows against Agreement Manager records: 3 filled, 5
+corrected", so the correction is visible in the UI, not just in the data. If
+a `docusign_getAgreementDetails` call fails for a row, that row is left as
+the Intake Agent returned it and the run continues — reconciliation is a
+backstop, not a hard dependency. Fixture-mode runs never call MCP and are
+unaffected by this step.
 
 ## Docusign CLI Setup Notes
 

@@ -100,7 +100,7 @@ test('prefers custom_provisions.c_SupplierName over the party list', () => {
   assert.equal(result.supplier, 'Brightline Supplies (extracted)');
 });
 
-test('never maps provisions.renewal_notice_date onto a reconciled field', () => {
+test('never maps provisions.renewal_notice_date or expiration_date onto renewalDate or noticeDeadline', () => {
   const record: AgreementRecord = {
     provisions: {
       renewal_notice_date: '2026-07-15T00:00:00',
@@ -114,6 +114,8 @@ test('never maps provisions.renewal_notice_date onto a reconciled field', () => 
   // renewalDate must come from c_RenewalDate / provisions.renewal_date only,
   // never from renewal_notice_date or expiration_date.
   assert.equal(result.renewalDate, null);
+  // noticeDeadline's only acceptable source is custom_provisions.c_NoticeDeadline.
+  assert.equal(result.noticeDeadline, null);
   assert.deepEqual(Object.keys(result), [
     'renewalType',
     'renewalDate',
@@ -122,8 +124,33 @@ test('never maps provisions.renewal_notice_date onto a reconciled field', () => 
     'currency',
     'supplier',
     'agreementTitle',
+    'noticeDeadline',
   ]);
-  assert.ok(!('noticeDeadline' in result));
+});
+
+test('reads noticeDeadline only from custom_provisions.c_NoticeDeadline', () => {
+  const record: AgreementRecord = {
+    provisions: {
+      renewal_notice_date: '2026-07-15T00:00:00',
+      expiration_date: '2026-08-14T00:00:00',
+    },
+    custom_provisions: { c_NoticeDeadline: '2026-08-01' },
+  };
+
+  const result = mapAgreementRecordToReconciledFields(record);
+
+  assert.equal(result.noticeDeadline, '2026-08-01');
+});
+
+test('coerces a literal "Not extracted" string in a raw field to null', () => {
+  const record: AgreementRecord = {
+    custom_provisions: { c_Currency: 'Not extracted', c_SupplierName: 'not extracted' },
+  };
+
+  const result = mapAgreementRecordToReconciledFields(record);
+
+  assert.equal(result.currency, null);
+  assert.equal(result.supplier, null);
 });
 
 test('uses c_RenewalDate over provisions.renewal_date and never expiration_date', () => {

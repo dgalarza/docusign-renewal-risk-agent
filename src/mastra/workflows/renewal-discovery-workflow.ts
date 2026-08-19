@@ -148,6 +148,7 @@ const intakeAgentFindRenewalsStep = createStep({
 
     const reconciliation = await reconcileRowsAgainstAgreementManager({
       rows: result.rows,
+      asOfDate,
       accountId: process.env.DOCUSIGN_ACCOUNT_ID,
       onRowError: (agreementId, error) => {
         emitProgress({
@@ -163,13 +164,13 @@ const intakeAgentFindRenewalsStep = createStep({
         detail: error instanceof Error ? error.message : String(error),
       });
 
-      return { rows: result.rows, reconciledRowCount: 0 };
+      return { rows: result.rows, reconciledRowCount: 0, filledRowCount: 0, correctedRowCount: 0 };
     });
 
     if (reconciliation.reconciledRowCount > 0) {
       emitProgress({
         kind: 'tool-result',
-        label: `Reconciled ${reconciliation.reconciledRowCount} ${reconciliation.reconciledRowCount === 1 ? 'row' : 'rows'} against Agreement Manager records`,
+        label: `Reconciled ${reconciliation.reconciledRowCount} ${reconciliation.reconciledRowCount === 1 ? 'row' : 'rows'} against Agreement Manager records: ${reconciliation.filledRowCount} filled, ${reconciliation.correctedRowCount} corrected`,
         detail: null,
       });
     }
@@ -519,17 +520,17 @@ Return one RenewalDiscoveryResult JSON object:
 - If Docusign returns renewalDate and noticePeriodDays but not noticeDeadline, calculate noticeDeadline as renewalDate minus noticePeriodDays.
 - If noticeDeadline is available, calculate daysUntilNoticeDeadline from noticeDeadline and ${input.asOfDate}.
 - If Docusign does not return renewalDate, keep the row so the preview can show missing renewal fields.
-- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, and agreementValue when Docusign did not return them.
-- Use "Not extracted" for supplier or agreementTitle when Docusign did not return them.
+- Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, agreementValue, and currency when Docusign did not return them. currency must be the JSON value null, never the string "Not extracted" and never a guessed code like "USD" — a downstream reconciliation step treats the literal text "Not extracted" as invalid data.
+- Use "Not extracted" for supplier or agreementTitle when Docusign did not return them (these two fields are text, not nullable, so they use the sentinel string instead of null).
 
 Each agreement record has a "provisions" object and a "custom_provisions" object (custom_provisions keys are prefixed "c_", e.g. c_RenewalType, c_RenewalDate). Map fields using this exact precedence — read every agreement record fully before deciding a field is missing:
 - renewalType: read custom_provisions.c_RenewalType first, then provisions.renewal_type. Map "Auto-renews" or AUTO_RENEW to "auto_renews"; "Manual renewal" or MANUAL to "manual_renewal"; "Evergreen" or EVERGREEN to "evergreen"; "No renewal" or NONE to "none". If neither field is present or the value does not match one of those, use "not_extracted". Never leave renewalType as "not_extracted" when custom_provisions.c_RenewalType or provisions.renewal_type is present and matches one of these values — this is the most common mistake, double-check every row against this table before returning it.
 - renewalDate: custom_provisions.c_RenewalDate, falling back to provisions.renewal_date if present. Never use provisions.expiration_date for renewalDate.
 - noticePeriodDays: custom_provisions.c_NoticePeriodDays, falling back to the day count in provisions.renewal_notice_period (an ISO-8601 duration like "P30D" means 30 days).
 - agreementValue: custom_provisions.c_AgreementValue, falling back to a total/annual value field in provisions if present (e.g. annual_agreement_value).
-- currency: custom_provisions.c_Currency, falling back to a currency field in provisions if present (e.g. annual_agreement_value_currency_code). Use "Not extracted" when neither is present — never guess or default to USD.
+- currency: custom_provisions.c_Currency, falling back to a currency field in provisions if present (e.g. annual_agreement_value_currency_code). Use null when neither is present — never guess or default to USD, and never write the string "Not extracted" into this field.
 - supplier: custom_provisions.c_SupplierName, falling back to the counterparty name in "parties" (the party whose name_in_agreement is not the buyer, "Example Buyer Operations Co."). Use "Not extracted" only if neither is available.
-- noticeDeadline: never use provisions.renewal_notice_date for this. Only use a direct custom_provisions.c_NoticeDeadline field if Docusign returns one; otherwise leave it null and let it be derived from renewalDate minus noticePeriodDays as instructed above.
+- noticeDeadline: the ONLY acceptable source is a direct custom_provisions.c_NoticeDeadline field. Never use provisions.renewal_notice_date (that is the current term's notice date, not this deadline) and never use provisions.expiration_date. If custom_provisions.c_NoticeDeadline is not present, set noticeDeadline to null and let it be derived from renewalDate minus noticePeriodDays as instructed above — do not compute it from any other provisions field yourself.
 - source.missingFields must list each missing required table field: supplier, agreementTitle, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType.
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 
