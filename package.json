@@ -5,7 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run test:policy",
-    "test:policy": "node --import tsx --test src/mastra/tools/portfolio-tools.test.ts src/mastra/tools/follow-up-tools.test.ts",
+    "test:policy": "node --import tsx --test src/mastra/tools/portfolio-tools.test.ts src/mastra/tools/follow-up-tools.test.ts src/mastra/tools/agreement-record-mapper.test.ts",
     "build:agreements": "node scripts/build-agreements.mjs",
     "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
     "preview:app": "next dev -H 0.0.0.0 -p 4173",

@@ -23,6 +23,7 @@ import {
   enrichRowsWithDerivedNoticeDeadlines,
   mapRenewalRowsToAgreements,
 } from '../tools/portfolio-tools';
+import { reconcileRowsAgainstAgreementManager } from '../tools/agreement-reconciliation';
 
 const DOCUSIGN_AGREEMENT_TOOL = 'docusign_getAllAgreements';
 const RISK_REVIEW_AGENT_TIMEOUT_MS = 5_000;
@@ -145,7 +146,35 @@ const intakeAgentFindRenewalsStep = createStep({
       detail: `Status ${result.status}`,
     });
 
-    return result;
+    const reconciliation = await reconcileRowsAgainstAgreementManager({
+      rows: result.rows,
+      accountId: process.env.DOCUSIGN_ACCOUNT_ID,
+      onRowError: (agreementId, error) => {
+        emitProgress({
+          kind: 'tool-result',
+          label: `Reconciliation failed for agreement ${agreementId}`,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      },
+    }).catch(error => {
+      emitProgress({
+        kind: 'tool-result',
+        label: 'Reconciliation against Agreement Manager skipped',
+        detail: error instanceof Error ? error.message : String(error),
+      });
+
+      return { rows: result.rows, reconciledRowCount: 0 };
+    });
+
+    if (reconciliation.reconciledRowCount > 0) {
+      emitProgress({
+        kind: 'tool-result',
+        label: `Reconciled ${reconciliation.reconciledRowCount} ${reconciliation.reconciledRowCount === 1 ? 'row' : 'rows'} against Agreement Manager records`,
+        detail: null,
+      });
+    }
+
+    return renewalDiscoveryResultSchema.parse({ ...result, rows: reconciliation.rows });
   },
 });
 
@@ -492,7 +521,15 @@ Return one RenewalDiscoveryResult JSON object:
 - If Docusign does not return renewalDate, keep the row so the preview can show missing renewal fields.
 - Use null for renewalDate, noticePeriodDays, noticeDeadline, daysUntilNoticeDeadline, and agreementValue when Docusign did not return them.
 - Use "Not extracted" for supplier or agreementTitle when Docusign did not return them.
-- Use renewalType "not_extracted" unless Docusign returns an explicit renewal type.
+
+Each agreement record has a "provisions" object and a "custom_provisions" object (custom_provisions keys are prefixed "c_", e.g. c_RenewalType, c_RenewalDate). Map fields using this exact precedence — read every agreement record fully before deciding a field is missing:
+- renewalType: read custom_provisions.c_RenewalType first, then provisions.renewal_type. Map "Auto-renews" or AUTO_RENEW to "auto_renews"; "Manual renewal" or MANUAL to "manual_renewal"; "Evergreen" or EVERGREEN to "evergreen"; "No renewal" or NONE to "none". If neither field is present or the value does not match one of those, use "not_extracted". Never leave renewalType as "not_extracted" when custom_provisions.c_RenewalType or provisions.renewal_type is present and matches one of these values — this is the most common mistake, double-check every row against this table before returning it.
+- renewalDate: custom_provisions.c_RenewalDate, falling back to provisions.renewal_date if present. Never use provisions.expiration_date for renewalDate.
+- noticePeriodDays: custom_provisions.c_NoticePeriodDays, falling back to the day count in provisions.renewal_notice_period (an ISO-8601 duration like "P30D" means 30 days).
+- agreementValue: custom_provisions.c_AgreementValue, falling back to a total/annual value field in provisions if present (e.g. annual_agreement_value).
+- currency: custom_provisions.c_Currency, falling back to a currency field in provisions if present (e.g. annual_agreement_value_currency_code). Use "Not extracted" when neither is present — never guess or default to USD.
+- supplier: custom_provisions.c_SupplierName, falling back to the counterparty name in "parties" (the party whose name_in_agreement is not the buyer, "Example Buyer Operations Co."). Use "Not extracted" only if neither is available.
+- noticeDeadline: never use provisions.renewal_notice_date for this. Only use a direct custom_provisions.c_NoticeDeadline field if Docusign returns one; otherwise leave it null and let it be derived from renewalDate minus noticePeriodDays as instructed above.
 - source.missingFields must list each missing required table field: supplier, agreementTitle, renewalDate, noticePeriodDays, noticeDeadline, agreementValue, currency, renewalType.
 - status should be "missing_fields" if any returned row is missing renewal table fields, "live" only if all returned rows are complete, "empty" if no matching agreements are returned, and "error" only if MCP fails.
 

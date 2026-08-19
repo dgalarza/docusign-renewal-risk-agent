@@ -45,6 +45,37 @@ kept in `source.missingFields` so the later policy engine can distinguish:
 - Missing `agreementValue`: the `$50k` rule cannot be evaluated; route to needs
   review when other renewal risk is present.
 
+## Deterministic Reconciliation Against Agreement Manager
+
+The Intake Agent (an LLM) is nondeterministic: on a given run it may return
+`renewalType: "not_extracted"` or a missing `renewalDate` for a row even
+though Agreement Manager has the data. To keep the demo's classifications
+reliable, the workflow adds a deterministic reconciliation pass after the
+Intake Agent step and before risk review (`src/mastra/tools/agreement-reconciliation.ts`).
+
+For every row the Intake Agent returned (bounded to 25 rows per run), the
+workflow calls `docusign_getAgreementDetails` directly from the MCP tool map
+— outside any agent, the same pattern `workflow-builder-tools.ts` uses for
+the Workflow Builder handoff — and fills in any of `renewalType`,
+`renewalDate`, `noticePeriodDays`, `agreementValue`, `currency`, `supplier`,
+and `agreementTitle` that is still `null`/`"not_extracted"`/`"Not extracted"`.
+The mapping itself lives in `src/mastra/tools/agreement-record-mapper.ts`, a
+pure, unit-tested function that reads `custom_provisions` (the `c_`-prefixed
+extraction fields) first and falls back to `provisions` — the same
+precedence documented above. `noticeDeadline` is intentionally excluded from
+reconciliation: it is never read from `provisions.renewal_notice_date`, only
+derived from `renewalDate` minus `noticePeriodDays` (or taken from a direct
+`c_NoticeDeadline` field if Agreement Manager ever extracts one).
+
+Reconciled rows record which fields changed in `row.source.reconciledFields`,
+and those fields are removed from `row.source.missingFields`. The run ledger
+shows one summary event per run, e.g. "Reconciled 8 rows against Agreement
+Manager records", so the correction is visible in the UI, not just in the
+data. If a `docusign_getAgreementDetails` call fails for a row, that row is
+left as the Intake Agent returned it and the run continues — reconciliation
+is a backstop, not a hard dependency. Fixture-mode runs never call MCP and
+are unaffected by this step.
+
 ## Docusign CLI Setup Notes
 
 Docusign CLI is the setup surface for Agreement Manager custom

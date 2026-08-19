@@ -60,6 +60,12 @@ export const renewalAgreementSourceSchema = z.object({
     .describe(
       'Table fields the source could not provide. Missing data is surfaced as an extraction gap, never invented — the policy engine routes rows with missing renewal terms to needs_review.',
     ),
+  reconciledFields: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Table fields that were null/not_extracted from the Intake Agent and were deterministically filled in by reconciling against the Agreement Manager record via docusign_getAgreementDetails.',
+    ),
 });
 
 export const renewalAgreementTableRowSchema = z.object({
