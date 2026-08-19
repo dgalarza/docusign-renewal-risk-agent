@@ -16,6 +16,7 @@ import {
   FOLLOW_UP_ACTIONS,
   formatActionLabel,
   MoneyValue,
+  NoticeDeadlineValue,
   NoticePeriodValue,
   RenewalTypeLabel,
   workflowBuilderStatusLabel,
@@ -82,7 +83,7 @@ export function RenewalDetailPanel({
               <DataValue value={row.renewalDate} />
             </DetailFact>
             <DetailFact label="Notice deadline">
-              <DataValue value={row.noticeDeadline} />
+              <NoticeDeadlineValue value={row.noticeDeadline} derived={row.noticeDeadlineDerived} />
             </DetailFact>
             <DetailFact label="Renewal type">
               <RenewalTypeLabel value={row.renewalType} />

@@ -143,6 +143,39 @@ export const mapRenewalRowsToAgreements = (
   rows: RenewalAgreementTableRow[],
 ): SupplierRenewalAgreement[] => rows.map(mapRenewalRowToAgreement);
 
+// The row schema mirrors what the source system returned; noticeDeadline may
+// be derived in code above (deriveNoticeDeadline) when extraction didn't
+// produce it directly. This backfills that derived value onto the row itself
+// so the UI can show it, instead of showing "Not extracted" while the policy
+// finding for the same row already relies on it.
+export const enrichRowsWithDerivedNoticeDeadlines = (
+  rows: RenewalAgreementTableRow[],
+  agreements: SupplierRenewalAgreement[],
+  riskBrief: RenewalRiskBrief,
+): RenewalAgreementTableRow[] => {
+  const agreementsById = new Map(agreements.map(agreement => [agreement.agreementId, agreement]));
+  const findingsById = new Map(riskBrief.findings.map(finding => [finding.agreementId, finding]));
+
+  return rows.map(row => {
+    if (row.noticeDeadline !== null) {
+      return row;
+    }
+
+    const derivedNoticeDeadline = agreementsById.get(row.agreementId)?.noticeDeadline ?? null;
+    if (derivedNoticeDeadline === null) {
+      return row;
+    }
+
+    return {
+      ...row,
+      noticeDeadline: derivedNoticeDeadline,
+      daysUntilNoticeDeadline:
+        findingsById.get(row.agreementId)?.daysUntilNoticeDeadline ?? row.daysUntilNoticeDeadline,
+      noticeDeadlineDerived: true,
+    };
+  });
+};
+
 const isInReviewWindow = (
   agreement: SupplierRenewalAgreement,
   asOfDate: string,

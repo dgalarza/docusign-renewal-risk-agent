@@ -10,7 +10,9 @@ import {
 import {
   classifyRenewalRisk,
   createRenewalRiskBrief,
+  enrichRowsWithDerivedNoticeDeadlines,
   mapRenewalRowToAgreement,
+  mapRenewalRowsToAgreements,
   renewalRiskSeverityOrder,
 } from './portfolio-tools';
 
@@ -51,6 +53,7 @@ const completeAutoRenewalRow = renewalAgreementTableRowSchema.parse({
     recordId: 'row-derived-deadline',
     missingFields: ['noticeDeadline'],
   },
+  noticeDeadlineDerived: false,
 } satisfies RenewalAgreementTableRow);
 
 test('documents the renewal risk severity order', () => {
@@ -148,6 +151,43 @@ test('routes missing agreement value to review when renewal risk is present', ()
   assert.equal(finding.classification, 'needs_review');
   assert.equal(finding.recommendedAction, 'owner_review');
   assert.ok(finding.extractedSignals.includes('Agreement value was not extracted.'));
+});
+
+test('enriches rows with derived notice deadlines while leaving extracted deadlines untouched', () => {
+  const extractedDeadlineRow = renewalAgreementTableRowSchema.parse({
+    ...completeAutoRenewalRow,
+    agreementId: 'row-extracted-deadline',
+    noticeDeadline: '2026-08-01',
+    daysUntilNoticeDeadline: 5,
+    source: {
+      ...completeAutoRenewalRow.source,
+      recordId: 'row-extracted-deadline',
+      missingFields: [],
+    },
+  });
+
+  const rows = [completeAutoRenewalRow, extractedDeadlineRow];
+  const agreements = mapRenewalRowsToAgreements(rows);
+  const riskBrief = createRenewalRiskBrief(agreements, {
+    asOfDate: fixture.metadata.asOfDate,
+    reviewWindowDays: fixture.metadata.reviewWindowDays,
+  });
+
+  const enrichedRows = enrichRowsWithDerivedNoticeDeadlines(rows, agreements, riskBrief);
+  const derivedRow = enrichedRows.find(row => row.agreementId === completeAutoRenewalRow.agreementId);
+  const untouchedRow = enrichedRows.find(row => row.agreementId === extractedDeadlineRow.agreementId);
+
+  assert.equal(derivedRow?.noticeDeadline, '2026-07-31');
+  assert.equal(derivedRow?.noticeDeadlineDerived, true);
+  assert.equal(
+    derivedRow?.daysUntilNoticeDeadline,
+    riskBrief.findings.find(finding => finding.agreementId === completeAutoRenewalRow.agreementId)
+      ?.daysUntilNoticeDeadline,
+  );
+
+  assert.equal(untouchedRow?.noticeDeadline, '2026-08-01');
+  assert.equal(untouchedRow?.noticeDeadlineDerived, false);
+  assert.equal(untouchedRow?.daysUntilNoticeDeadline, 5);
 });
 
 test('routes missing notice terms to legal review', () => {
