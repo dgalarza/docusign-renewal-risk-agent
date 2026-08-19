@@ -66,10 +66,13 @@ const server = createServer(async (req, res) => {
   }
 
   if (!code || returnedState !== state) {
+    // Keep listening: a stale tab reload or a probe should not kill the flow.
     res.writeHead(400, { 'Content-Type': 'text/plain' });
-    res.end('Missing authorization code or state mismatch.');
-    server.close();
-    fail('Missing authorization code or state mismatch.');
+    res.end('Missing authorization code or state mismatch. Re-open the authorization URL printed in the terminal.');
+    console.error(
+      `Ignored callback without a valid code/state (state received: ${returnedState ?? 'none'}, expected: ${state}). Still listening.`,
+    );
+    return;
   }
 
   try {
