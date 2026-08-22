@@ -9,7 +9,7 @@ import {
   formatActionLabel,
   workflowBuilderStatusLabel,
 } from '@/components/renewal-values';
-import { cn } from '@/lib/utils';
+import { cn, docusignWorkflowUrl } from '@/lib/utils';
 
 type DecisionKind = DecisionTrailRow['decision'];
 type WorkflowBuilderStatus = RenewalDecisionResult['workflowBuilder']['status'];
@@ -269,14 +269,14 @@ function DecisionDetail({ row }: { row: DecisionTrailRow }) {
             Instance {row.workflowInstanceId}
           </p>
         ) : null}
-        {row.workflowInstanceUrl ? (
+        {workflowBuilder.workflowId ? (
           <a
-            href={row.workflowInstanceUrl}
+            href={docusignWorkflowUrl(workflowBuilder.workflowId)}
             target="_blank"
             rel="noreferrer"
             className="mt-3 inline-flex w-fit items-center gap-1 text-sm font-medium text-accent-foreground underline-offset-2 hover:underline"
           >
-            Open workflow instance
+            Open workflow
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         ) : null}

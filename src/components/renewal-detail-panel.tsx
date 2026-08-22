@@ -21,7 +21,7 @@ import {
   RenewalTypeLabel,
   workflowBuilderStatusLabel,
 } from '@/components/renewal-values';
-import { withDocusignUtmParams } from '@/lib/utils';
+import { docusignWorkflowUrl, withDocusignUtmParams } from '@/lib/utils';
 
 export type DecisionSubmitInput = {
   row: RenewalAgreementTableRow;
@@ -300,14 +300,14 @@ function DecisionResultCard({ result }: { result: RenewalDecisionResult }) {
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {result.workflowBuilder.details}
         </p>
-        {result.workflowBuilder.instanceUrl ? (
+        {result.workflowBuilder.workflowId ? (
           <a
-            href={result.workflowBuilder.instanceUrl}
+            href={docusignWorkflowUrl(result.workflowBuilder.workflowId)}
             target="_blank"
             rel="noreferrer"
             className="mt-2 inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-foreground underline-offset-2 hover:underline"
           >
-            Open workflow instance
+            Open workflow
             <ExternalLink className="size-3" aria-hidden />
           </a>
         ) : null}

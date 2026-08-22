@@ -26,6 +26,10 @@ export function normalizeCurrencyCode(currency: string | null | undefined): stri
   return 'USD';
 }
 
+export function docusignWorkflowUrl(workflowId: string) {
+  return `https://apps-d.docusign.com/send/workflows/${encodeURIComponent(workflowId)}`;
+}
+
 export function withDocusignUtmParams(href: string) {
   try {
     const url = new URL(href);
