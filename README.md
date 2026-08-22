@@ -163,13 +163,33 @@ human decision to `POST /api/renewals/decisions`, which:
 
 - validates the selected row, policy finding, and human decision;
 - creates a deterministic `followUpPlan`;
-- records a local JSONL decision trail under `.mastra/`;
+- appends one row to the local, append-only SQLite decision trail at
+  `.mastra/renewal-decision-trail.db` (see [Decision trail](#decision-trail));
 - calls `docusign_getWorkflowTriggerRequirements` to prepare the Workflow
   Builder handoff when `DOCUSIGN_WORKFLOW_ID` and `DOCUSIGN_ACCOUNT_ID` are
   configured;
 - calls `docusign_triggerWorkflow` for approved or overridden follow-up actions.
 
 Rejected decisions and `no_action` overrides skip Workflow Builder.
+
+### Decision trail
+
+Every decision is recorded in an append-only SQLite database at
+`.mastra/renewal-decision-trail.db` — one row per decision in the
+`renewal_decisions` table, with columns for the human decision (reviewer,
+approved/edited/rejected, recommended vs. selected action, notes), the
+follow-up plan status, and the Workflow Builder handoff (status, instance ID
+and URL), plus the full `RenewalDecisionResult` verbatim in `record_json`.
+The app only ever inserts rows; nothing in the code updates or deletes them.
+Inspect it with the `sqlite3` CLI:
+
+```bash
+sqlite3 -header -column .mastra/renewal-decision-trail.db 'SELECT id, decided_at, agreement_id, supplier, reviewer, decision, recommended_action, selected_action, workflow_builder_status FROM renewal_decisions ORDER BY id DESC LIMIT 10;'
+```
+
+If an older `.mastra/renewal-decision-trail.jsonl` file exists, its lines are
+imported into the table the first time the database is opened (only when the
+table is empty); the JSONL file is left in place.
 
 ### Workflow Builder Setup
 

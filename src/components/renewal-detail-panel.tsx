@@ -163,7 +163,7 @@ export function RenewalDetailPanel({
  * Human approval checkpoint — the governed moment of the demo. The reviewer
  * approves the policy recommendation, overrides it with another follow-up
  * action, or rejects follow-up entirely. The decision posts to
- * POST /api/renewals/decisions, which records the decision trail and hands
+ * POST /api/renewals/decisions, which appends to the SQLite decision trail and hands
  * approved actions to Docusign Workflow Builder.
  */
 function DecisionPanel({
