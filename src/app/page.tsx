@@ -7,6 +7,7 @@ import {
   Loader2,
   Search,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RenewalAgreementTableRow,
@@ -325,6 +326,14 @@ export default function RenewalDiscoveryPage() {
                 {source === 'fixture' ? ' · no Docusign credentials needed' : ''}
               </p>
             </div>
+
+            <Link
+              href="/decisions"
+              className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-2 hover:text-accent-foreground hover:underline"
+            >
+              Decision trail
+              <ChevronRight className="size-4" aria-hidden />
+            </Link>
           </div>
 
         </aside>

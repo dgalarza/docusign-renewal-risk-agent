@@ -195,3 +195,34 @@ export const listDecisions = async (
     record: renewalDecisionResultSchema.parse(JSON.parse(String(row.record_json))),
   }));
 };
+
+/** Counts every decision ever recorded in the trail. */
+export const countDecisions = async (options: DecisionTrailOptions = {}): Promise<number> => {
+  const client = await getClient(options.directory ?? defaultDirectory());
+  const counted = await client.execute('SELECT COUNT(*) AS count FROM renewal_decisions');
+  return Number(counted.rows[0]?.count ?? 0);
+};
+
+export interface DecisionTrailSnapshot {
+  /** Newest decisions first, capped at `limit`. */
+  decisions: DecisionTrailRow[];
+  /** Total rows in the trail, which may exceed `decisions.length`. */
+  total: number;
+  limit: number;
+}
+
+/**
+ * Read-only view used by the decision trail page and its GET endpoint: the
+ * newest `limit` rows plus the total count, so the UI can say how many of
+ * the recorded decisions it is showing.
+ */
+export const readDecisionTrail = async (
+  limit = 50,
+  options: DecisionTrailOptions = {},
+): Promise<DecisionTrailSnapshot> => {
+  const [decisions, total] = await Promise.all([
+    listDecisions(limit, options),
+    countDecisions(options),
+  ]);
+  return { decisions, total, limit };
+};

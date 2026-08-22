@@ -8,12 +8,33 @@ import {
   renewalRiskFindingSchema,
   type RenewalDecisionResult,
 } from '@/mastra/domain/schemas';
-import { appendDecision } from '@/mastra/tools/decision-trail';
+import { appendDecision, readDecisionTrail } from '@/mastra/tools/decision-trail';
 import { createFollowUpPlan } from '@/mastra/tools/follow-up-tools';
 import { createWorkflowBuilderHandoff } from '@/mastra/tools/workflow-builder-tools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const DECISION_TRAIL_PAGE_SIZE = 50;
+
+/**
+ * Read-only view of the append-only decision trail: the newest 50 decisions
+ * plus the total count. There is deliberately no way to edit or remove a row
+ * through this route — the trail is the audit record.
+ */
+export async function GET() {
+  try {
+    const snapshot = await readDecisionTrail(DECISION_TRAIL_PAGE_SIZE);
+    return NextResponse.json(snapshot);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
+  }
+}
 
 const decisionRequestSchema = z.object({
   row: renewalAgreementTableRowSchema,

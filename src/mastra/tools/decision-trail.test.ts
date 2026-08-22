@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import type { RenewalDecisionResult } from '../domain/schemas';
 import * as decisionTrail from './decision-trail';
-import { appendDecision, listDecisions } from './decision-trail';
+import { appendDecision, listDecisions, readDecisionTrail } from './decision-trail';
 
 const makeResult = (overrides: Partial<RenewalDecisionResult['decision']> = {}): RenewalDecisionResult => ({
   decision: {
@@ -83,7 +83,9 @@ test('module is append-only: exposes no update or delete helpers', () => {
     'DECISION_TRAIL_DB_FILENAME',
     'LEGACY_DECISION_TRAIL_JSONL_FILENAME',
     'appendDecision',
+    'countDecisions',
     'listDecisions',
+    'readDecisionTrail',
   ]);
   for (const name of exported) {
     assert.doesNotMatch(name, /update|delete|remove|clear|reset/i);
@@ -109,4 +111,24 @@ test('imports a legacy JSONL trail once on first open and leaves the file untouc
   assert.equal(afterAppend.length, 2, 'legacy import is not repeated');
 
   assert.equal(await readFile(jsonlPath, 'utf8'), jsonl);
+});
+
+test('readDecisionTrail returns the newest rows plus the total count (GET /api/renewals/decisions shape)', async () => {
+  const directory = await tempDirectory();
+
+  const empty = await readDecisionTrail(2, { directory });
+  assert.deepEqual(empty, { decisions: [], total: 0, limit: 2 });
+
+  for (const reviewer of ['First', 'Second', 'Third']) {
+    await appendDecision(makeResult({ reviewer }), { supplier: 'Clearview' }, { directory });
+  }
+
+  const snapshot = await readDecisionTrail(2, { directory });
+  assert.equal(snapshot.total, 3);
+  assert.equal(snapshot.limit, 2);
+  assert.deepEqual(
+    snapshot.decisions.map(row => row.reviewer),
+    ['Third', 'Second'],
+    'newest first, capped at limit',
+  );
 });
