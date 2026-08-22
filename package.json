@@ -5,7 +5,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run test:policy",
-    "test:policy": "node --import tsx --test src/mastra/tools/portfolio-tools.test.ts src/mastra/tools/follow-up-tools.test.ts src/mastra/tools/agreement-record-mapper.test.ts src/mastra/tools/agreement-reconciliation.test.ts",
+    "test:policy": "node --import tsx --test src/mastra/tools/portfolio-tools.test.ts src/mastra/tools/follow-up-tools.test.ts src/mastra/tools/agreement-record-mapper.test.ts src/mastra/tools/agreement-reconciliation.test.ts src/mastra/tools/decision-trail.test.ts",
     "build:agreements": "node scripts/build-agreements.mjs",
     "dev": "MASTRA_AUTO_DETECT_URL=true mastra dev",
     "preview:app": "next dev -H 0.0.0.0 -p 4173",
@@ -31,6 +31,7 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "@mastra/core": "^1.49.0",
     "@mastra/duckdb": "^1.5.0",
     "@mastra/libsql": "^1.15.0",
